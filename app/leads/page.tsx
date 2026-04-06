@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Lead, LeadStatus } from '@/types/lead';
 import { ScoreBadge } from '@/components/score-badge';
 import { StatusBadge } from '@/components/status-badge';
+import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 
 const STATUS_OPTIONS: { value: LeadStatus | 'all'; label: string }[] = [
@@ -45,11 +46,45 @@ const CITY_OPTIONS = [
 export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<string>('all');
   const [city, setCity] = useState<string>('all');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const { toast } = useToast();
+
+  const handleImport = async () => {
+    setImporting(true);
+    try {
+      const response = await fetch('/api/leads/import', {
+        method: 'POST',
+      });
+      const result = await response.json();
+      
+      if (result.success) {
+        toast({
+          title: '导入成功',
+          description: `导入 ${result.imported} 条新 leads（其中 ${result.chineseRestaurants || 0} 家中餐厅）`,
+        });
+        fetchLeads();
+      } else {
+        toast({
+          title: '导入失败',
+          description: result.error || '请稍后重试',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: '导入失败',
+        description: '网络错误，请稍后重试',
+        variant: 'destructive',
+      });
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const fetchLeads = useCallback(async () => {
     setLoading(true);
@@ -89,6 +124,23 @@ export default function LeadsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-[#1e3a5f]">Leads 列表</h2>
+        <Button 
+          onClick={handleImport} 
+          disabled={importing}
+          className="bg-[#1e3a5f] hover:bg-[#2d4a6f]"
+        >
+          {importing ? (
+            <>
+              <span className="animate-spin mr-2">⟳</span>
+              导入中...
+            </>
+          ) : (
+            <>
+              <span className="mr-2">📥</span>
+              自动导入 SF 新执照
+            </>
+          )}
+        </Button>
       </div>
 
       <Card>
