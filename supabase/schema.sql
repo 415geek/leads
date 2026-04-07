@@ -1,4 +1,4 @@
--- MenusifuLeads Database Schema
+-- Restaurant Leads Finder — database schema
 -- 运行此 SQL 在 Supabase 中创建 leads 表
 
 -- 启用 UUID 扩展

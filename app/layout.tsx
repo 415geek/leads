@@ -9,8 +9,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "MenusifuLeads - POS 销售获客系统",
-  description: "自动发现湾区新开张餐厅，生成精准 leads",
+  title: "Restaurant Leads Finder",
+  description: "自动发现湾区新开张餐厅，生成与管理销售线索",
 };
 
 export default function RootLayout({
@@ -24,7 +24,8 @@ export default function RootLayout({
         <header className="bg-[#1e3a5f] text-white py-4 px-6 shadow-md">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <h1 className="text-xl font-bold">
-              <span className="text-[#f59e0b]">Menusifu</span>Leads
+              <span className="text-[#f59e0b]">Restaurant</span>
+              <span> Leads Finder</span>
             </h1>
             <nav className="flex gap-4">
               <a href="/" className="hover:text-[#f59e0b] transition-colors">

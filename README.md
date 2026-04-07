@@ -1,6 +1,6 @@
-# MenusifuLeads
+# Restaurant Leads Finder
 
-湾区中餐厅 POS 销售获客系统 — 自动发现新开张餐厅，生成精准 leads。
+自动发现湾区新开张餐饮类商家，聚合与管理销售线索。
 
 ## 技术栈
 
