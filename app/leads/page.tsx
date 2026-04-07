@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Lead, LeadStatus } from '@/types/lead';
 import { ScoreBadge } from '@/components/score-badge';
 import { StatusBadge } from '@/components/status-badge';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import Link from 'next/link';
 
 const STATUS_OPTIONS: { value: LeadStatus | 'all'; label: string }[] = [
@@ -52,7 +52,6 @@ export default function LeadsPage() {
   const [city, setCity] = useState<string>('all');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const { toast } = useToast();
 
   const handleImport = async () => {
     setImporting(true);
@@ -63,24 +62,19 @@ export default function LeadsPage() {
       const result = await response.json();
       
       if (result.success) {
-        toast({
-          title: '导入成功',
-          description: `导入 ${result.imported} 条新 leads（其中 ${result.chineseRestaurants || 0} 家中餐厅）`,
-        });
+        const extra =
+          typeof result.chineseTagged === 'number' && result.chineseTagged > 0
+            ? `，含中餐标签 ${result.chineseTagged} 条`
+            : '';
+        toast.success(
+          `新增 ${result.imported} 条餐饮类 leads（本次拉取 ${result.total ?? result.imported} 条${extra}）`,
+        );
         fetchLeads();
       } else {
-        toast({
-          title: '导入失败',
-          description: result.error || '请稍后重试',
-          variant: 'destructive',
-        });
+        toast.error(result.error || '导入失败，请稍后重试');
       }
-    } catch (error) {
-      toast({
-        title: '导入失败',
-        description: '网络错误，请稍后重试',
-        variant: 'destructive',
-      });
+    } catch {
+      toast.error('网络错误，请稍后重试');
     } finally {
       setImporting(false);
     }
@@ -137,7 +131,7 @@ export default function LeadsPage() {
           ) : (
             <>
               <span className="mr-2">📥</span>
-              自动导入 SF 新执照
+              自动导入 SF 餐饮新登记
             </>
           )}
         </Button>
