@@ -17,6 +17,7 @@ import { Lead, LeadStatus } from '@/types/lead';
 import { ScoreBadge } from '@/components/score-badge';
 import { StatusBadge } from '@/components/status-badge';
 import { SourceRegistrationPanel } from '@/components/source-registration-panel';
+import { SfRegistrationSummary } from '@/components/sf-registration-summary';
 import { FilingHistoryPanel } from '@/components/filing-history-panel';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
@@ -223,6 +224,8 @@ export default function LeadDetailPage({
           <StatusBadge status={lead.lead_status} />
         </div>
       </div>
+
+      <SfRegistrationSummary sourceRaw={lead.source_raw} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="lg:col-span-2">

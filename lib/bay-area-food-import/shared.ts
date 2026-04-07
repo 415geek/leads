@@ -60,6 +60,7 @@ export function buildCuisineLabel(parts: {
 export function buildSfFoodServiceWhereClause(sinceDate: string): string {
   const food =
     `naic_code like '722%' ` +
+    `OR naic_code like '%722%' ` +
     `OR naic_code_description like '%Food Service%' ` +
     `OR naic_code_description like '%Restaurant%' ` +
     `OR naic_code_description like '%Drinking%' ` +

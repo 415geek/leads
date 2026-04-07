@@ -1,5 +1,6 @@
 import { calculateLeadScore } from '@/lib/scoring';
 import type { Lead } from '@/types/lead';
+import { sfG8m3DisplayName, sfG8m3LegalNameForCuisine, type SfG8m3Shape } from '@/lib/sf-data-sf-fields';
 import {
   FETCH_LIMIT,
   buildCuisineLabel,
@@ -12,9 +13,8 @@ import {
 
 const SF_DATA_API = 'https://data.sfgov.org/resource/g8m3-pdis.json';
 
-interface SFBusinessRecord {
-  business_name?: string;
-  dba_name?: string;
+/** DataSF g8m3-pdis：现行字段以 ownership_name + dba_name 为主，部分行仍有 business_name / NAICS / 执照 */
+type SFBusinessRecord = SfG8m3Shape & {
   full_business_address?: string;
   business_phone?: string;
   naic_code?: string;
@@ -25,7 +25,7 @@ interface SFBusinessRecord {
   dba_start_date?: string;
   location_start_date?: string;
   city?: string;
-}
+};
 
 export async function fetchSanFranciscoFoodLeads(
   sinceDate: string
@@ -56,18 +56,17 @@ export async function fetchSanFranciscoFoodLeads(
 
     for (const row of rows) {
       const record = row as unknown as SFBusinessRecord;
-      const nameRaw = record.business_name || record.dba_name;
-      if (!nameRaw || String(nameRaw).length < 2) continue;
+      const name = sfG8m3DisplayName(record);
+      if (!name || name.length < 2) continue;
 
-      const name = String(record.dba_name || record.business_name || 'Unknown');
       const cuisineType = buildCuisineLabel({
         naicsLine: record.naic_code_description,
         licLine:
           pickText(record.lic_code_description) ||
           pickText(record.lic_code_descriptions_list) ||
           pickText(record.lic),
-        businessName: record.business_name,
-        dba: record.dba_name,
+        businessName: sfG8m3LegalNameForCuisine(record),
+        dba: pickText(record.dba_name),
       });
       const licenseDate = record.location_start_date || record.dba_start_date;
       const licenseType =
