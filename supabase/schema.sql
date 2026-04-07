@@ -15,6 +15,7 @@ create table if not exists leads (
   source text default 'sf_gov',
   license_date date,
   license_type text,
+  source_raw jsonb,
   lead_score integer default 0,
   lead_status text default 'new' check (lead_status in ('new','contacted','in_progress','converted','not_interested')),
   outreach_message text,

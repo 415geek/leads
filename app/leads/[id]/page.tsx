@@ -15,7 +15,28 @@ import {
 import { Lead, LeadStatus } from '@/types/lead';
 import { ScoreBadge } from '@/components/score-badge';
 import { StatusBadge } from '@/components/status-badge';
+import { SourceRegistrationPanel } from '@/components/source-registration-panel';
 import { toast } from 'sonner';
+
+function displayOrDash(value: string | null | undefined): string {
+  if (value === null || value === undefined) return '—';
+  const t = String(value).trim();
+  return t.length ? t : '—';
+}
+
+function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString('zh-CN', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
 const STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'new', label: '新线索' },
@@ -171,37 +192,46 @@ export default function LeadDetailPage({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
+        <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>基本信息</CardTitle>
+            <CardTitle>Leads 档案（系统字段全览）</CardTitle>
+            <p className="text-sm font-normal text-muted-foreground">
+              以下为数据库中保存的全部业务字段（与政府原始 JSON 可能部分重复，便于对照）。
+            </p>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <div className="text-sm text-gray-500">地址</div>
-                <div className="font-medium">{lead.address || '-'}</div>
-              </div>
-              <div>
-                <div className="text-sm text-gray-500">电话</div>
-                <div className="font-medium">{lead.phone || '-'}</div>
-              </div>
-              <div>
-                <div className="text-sm text-gray-500">菜系</div>
-                <div className="font-medium">{lead.cuisine_type || '-'}</div>
-              </div>
-              <div>
-                <div className="text-sm text-gray-500">城市</div>
-                <div className="font-medium">{lead.city}</div>
-              </div>
-              <div>
-                <div className="text-sm text-gray-500">执照日期</div>
-                <div className="font-medium">{lead.license_date || '-'}</div>
-              </div>
-              <div>
-                <div className="text-sm text-gray-500">数据来源</div>
-                <div className="font-medium">{lead.source}</div>
-              </div>
-            </div>
+          <CardContent>
+            <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {(
+                [
+                  ['id', '记录 ID', lead.id, false],
+                  ['name', '名称（展示用）', lead.name, false],
+                  ['address', '地址', displayOrDash(lead.address), false],
+                  ['phone', '电话', displayOrDash(lead.phone), false],
+                  ['cuisine_type', '菜系 / 业态标签', displayOrDash(lead.cuisine_type), false],
+                  ['city', '城市', lead.city, false],
+                  ['source', '数据来源', lead.source, false],
+                  ['license_date', '执照 / 开业相关日期', displayOrDash(lead.license_date), false],
+                  ['license_type', '执照类型说明', displayOrDash(lead.license_type), false],
+                  ['lead_score', '线索评分', String(lead.lead_score), false],
+                  ['lead_status', '跟进状态', lead.lead_status, false],
+                  ['outreach_message', '开发信（已保存）', displayOrDash(lead.outreach_message), true],
+                  ['notes', '备注（已保存）', displayOrDash(lead.notes), true],
+                  ['created_at', '创建时间', formatDateTime(lead.created_at), false],
+                  ['updated_at', '更新时间', formatDateTime(lead.updated_at), false],
+                ] as const
+              ).map(([key, label, value, multiline]) => (
+                <div key={key} className={multiline ? 'sm:col-span-2 lg:col-span-3' : undefined}>
+                  <dt className="text-xs font-medium text-slate-500">{label}</dt>
+                  <dd
+                    className={`mt-1 text-sm font-medium text-slate-900 break-words ${
+                      multiline ? 'max-h-40 overflow-y-auto whitespace-pre-wrap rounded-md bg-slate-50 p-2' : 'break-all'
+                    }`}
+                  >
+                    {value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
           </CardContent>
         </Card>
 
@@ -250,6 +280,8 @@ export default function LeadDetailPage({
           </CardContent>
         </Card>
       </div>
+
+      <SourceRegistrationPanel sourceRaw={lead.source_raw ?? null} />
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">

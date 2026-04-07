@@ -1,5 +1,8 @@
 export type LeadStatus = 'new' | 'contacted' | 'in_progress' | 'converted' | 'not_interested';
 
+/** 政府开放数据等来源的完整登记快照（字段随来源变化） */
+export type LeadSourceRaw = Record<string, unknown>;
+
 export interface Lead {
   id: string;
   name: string;
@@ -10,6 +13,8 @@ export interface Lead {
   source: string;
   license_date: string | null;
   license_type: string | null;
+  /** 来源 API 全量字段，用于界面展示（旧数据或未跑迁移时可能为空） */
+  source_raw?: LeadSourceRaw | null;
   lead_score: number;
   lead_status: LeadStatus;
   outreach_message: string | null;
@@ -27,6 +32,7 @@ export interface LeadCreateInput {
   source?: string;
   license_date?: string;
   license_type?: string;
+  source_raw?: LeadSourceRaw;
 }
 
 export interface LeadUpdateInput {

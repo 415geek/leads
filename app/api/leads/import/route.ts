@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { calculateLeadScore } from '@/lib/scoring';
+import type { LeadSourceRaw } from '@/types/lead';
 
 const SF_DATA_API = 'https://data.sfgov.org/resource/g8m3-pdis.json';
 
@@ -17,9 +18,24 @@ interface SFBusinessRecord {
   naic_code?: string;
   naic_code_description?: string;
   lic_code_description?: string;
+  lic_code_descriptions_list?: string;
+  lic?: string;
   dba_start_date?: string;
   location_start_date?: string;
   city?: string;
+}
+
+function pickText(v: unknown): string | null {
+  if (v == null) return null;
+  if (typeof v === 'string') {
+    const t = v.trim();
+    return t.length ? t : null;
+  }
+  return null;
+}
+
+function snapshotSourceRaw(record: Record<string, unknown>): LeadSourceRaw {
+  return JSON.parse(JSON.stringify(record)) as LeadSourceRaw;
 }
 
 function isChinese(text: string): boolean {
@@ -103,17 +119,23 @@ export async function POST() {
       throw new Error(`SF Data API error: ${response.status}`);
     }
 
-    const records: SFBusinessRecord[] = await response.json();
+    const rows = (await response.json()) as Record<string, unknown>[];
 
-    const leadsToInsert = records
-      .filter((record) => {
-        const name = record.business_name || record.dba_name;
-        return name && name.length > 1;
+    const leadsToInsert = rows
+      .filter((row) => {
+        const r = row as unknown as SFBusinessRecord;
+        const name = r.business_name || r.dba_name;
+        return name && String(name).length > 1;
       })
-      .map((record) => {
+      .map((row) => {
+        const record = row as unknown as SFBusinessRecord;
         const name = record.dba_name || record.business_name || 'Unknown';
         const cuisineType = buildCuisineLabel(record);
         const licenseDate = record.location_start_date || record.dba_start_date;
+        const licenseType =
+          pickText(record.lic_code_description) ||
+          pickText(record.lic_code_descriptions_list) ||
+          pickText(record.lic);
 
         const lead = {
           name,
@@ -122,7 +144,9 @@ export async function POST() {
           cuisine_type: cuisineType,
           city: 'San Francisco',
           source: 'sf_gov',
-          license_date: licenseDate ? licenseDate.split('T')[0] : null,
+          license_date: licenseDate ? String(licenseDate).split('T')[0] : null,
+          license_type: licenseType,
+          source_raw: snapshotSourceRaw(row),
           lead_status: 'new' as const,
         };
 
