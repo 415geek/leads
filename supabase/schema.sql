@@ -50,3 +50,40 @@ create index if not exists idx_leads_created on leads(created_at desc);
 -- ('金龙餐厅', '123 Main St, San Francisco, CA', '415-555-1234', '粤菜', 'San Francisco', current_date - interval '5 days', 85, 'new'),
 -- ('川味坊', '456 Market St, San Francisco, CA', '415-555-5678', '川菜', 'San Francisco', current_date - interval '10 days', 78, 'new'),
 -- ('东北饺子馆', '789 Mission St, Oakland, CA', '510-555-9012', '东北菜', 'Oakland', current_date - interval '20 days', 65, 'contacted');
+
+-- ---------------------------------------------------------------------------
+-- 已有数据库补列（若曾报错：Could not find the 'source_raw' column…）
+-- 在 Supabase → SQL Editor 执行本节即可，可重复执行（IF NOT EXISTS）
+-- ---------------------------------------------------------------------------
+
+alter table leads add column if not exists source_raw jsonb;
+
+comment on column leads.source_raw is '政府/来源 API 返回的完整登记字段（JSON）';
+
+-- ---------------------------------------------------------------------------
+-- CA Secretary of State（bizfileonline.sos.ca.gov）等企业备案附件
+-- 在 Supabase SQL Editor 对已有库执行以下段落（或整文件）
+-- ---------------------------------------------------------------------------
+
+alter table leads add column if not exists ca_entity_number text;
+
+comment on column leads.ca_entity_number is 'California SOS entity number / 搜索用编号，便于跳转州政府网站';
+
+create table if not exists lead_filings (
+  id uuid default uuid_generate_v4() primary key,
+  lead_id uuid not null references leads(id) on delete cascade,
+  source text not null default 'ca_sos' check (source in ('ca_sos', 'manual')),
+  filing_type text not null,
+  control_id text,
+  filed_date date,
+  document_url text,
+  extra jsonb default '{}'::jsonb,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_lead_filings_lead_id on lead_filings(lead_id);
+create index if not exists idx_lead_filings_filed_date on lead_filings(lead_id, filed_date desc nulls last);
+
+create unique index if not exists idx_lead_filings_dedupe_control
+  on lead_filings (lead_id, control_id)
+  where control_id is not null and length(trim(control_id)) > 0;

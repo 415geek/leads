@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -16,7 +17,10 @@ import { Lead, LeadStatus } from '@/types/lead';
 import { ScoreBadge } from '@/components/score-badge';
 import { StatusBadge } from '@/components/status-badge';
 import { SourceRegistrationPanel } from '@/components/source-registration-panel';
+import { FilingHistoryPanel } from '@/components/filing-history-panel';
+import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import { dashboardBusinessSearchHref } from '@/lib/dashboard-business-search';
 
 function displayOrDash(value: string | null | undefined): string {
   if (value === null || value === undefined) return '—';
@@ -58,6 +62,7 @@ export default function LeadDetailPage({
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notes, setNotes] = useState('');
+  const [entityNumber, setEntityNumber] = useState('');
 
   useEffect(() => {
     async function fetchLead() {
@@ -74,6 +79,7 @@ export default function LeadDetailPage({
         const data = await response.json();
         setLead(data);
         setNotes(data.notes || '');
+        setEntityNumber(data.ca_entity_number?.trim() ?? '');
       } catch (error) {
         console.error('Failed to fetch lead:', error);
         toast.error('获取数据失败');
@@ -104,6 +110,28 @@ export default function LeadDetailPage({
     } catch (error) {
       console.error('Failed to update status:', error);
       toast.error('更新失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveEntityNumber = async () => {
+    if (!lead) return;
+    setSaving(true);
+    try {
+      const v = entityNumber.trim();
+      const response = await fetch(`/api/leads/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ca_entity_number: v.length ? v : null }),
+      });
+      if (!response.ok) throw new Error('Failed to update');
+      const updated = await response.json();
+      setLead(updated);
+      toast.success('实体编号已保存');
+    } catch (error) {
+      console.error('Failed to save entity number:', error);
+      toast.error('保存失败（若数据库未迁移 ca_entity_number 列会失败）');
     } finally {
       setSaving(false);
     }
@@ -185,7 +213,12 @@ export default function LeadDetailPage({
           </Button>
           <h2 className="text-2xl font-bold text-[#1e3a5f]">{lead.name}</h2>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <Link href={dashboardBusinessSearchHref(lead.name, lead.city)}>
+            <Button variant="secondary" size="sm" className="whitespace-nowrap">
+              Dashboard 商业搜索
+            </Button>
+          </Link>
           <ScoreBadge score={lead.lead_score} />
           <StatusBadge status={lead.lead_status} />
         </div>
@@ -212,6 +245,12 @@ export default function LeadDetailPage({
                   ['source', '数据来源', lead.source, false],
                   ['license_date', '执照 / 开业相关日期', displayOrDash(lead.license_date), false],
                   ['license_type', '执照类型说明', displayOrDash(lead.license_type), false],
+                  [
+                    'ca_entity_number',
+                    'CA 实体编号（SOS）',
+                    displayOrDash(lead.ca_entity_number ?? null),
+                    false,
+                  ],
                   ['lead_score', '线索评分', String(lead.lead_score), false],
                   ['lead_status', '跟进状态', lead.lead_status, false],
                   ['outreach_message', '开发信（已保存）', displayOrDash(lead.outreach_message), true],
@@ -261,6 +300,25 @@ export default function LeadDetailPage({
             </div>
 
             <div>
+              <div className="text-sm text-gray-500 mb-2">CA 实体编号（BizFile）</div>
+              <Input
+                value={entityNumber}
+                onChange={(e) => setEntityNumber(e.target.value)}
+                placeholder="例如州务卿网站上的 Entity Number"
+              />
+              <Button
+                type="button"
+                onClick={handleSaveEntityNumber}
+                disabled={saving}
+                className="mt-2"
+                size="sm"
+                variant="secondary"
+              >
+                保存实体编号
+              </Button>
+            </div>
+
+            <div>
               <div className="text-sm text-gray-500 mb-2">备注</div>
               <Textarea
                 value={notes}
@@ -282,6 +340,15 @@ export default function LeadDetailPage({
       </div>
 
       <SourceRegistrationPanel sourceRaw={lead.source_raw ?? null} />
+
+      <FilingHistoryPanel
+        leadId={id}
+        entityNumber={
+          entityNumber.trim() !== ''
+            ? entityNumber.trim()
+            : lead.ca_entity_number?.trim() || undefined
+        }
+      />
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">

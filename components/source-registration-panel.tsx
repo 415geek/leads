@@ -78,8 +78,10 @@ export function SourceRegistrationPanel({ sourceRaw }: { sourceRaw: LeadSourceRa
           <CardTitle>政府登记原始信息</CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground">
-          暂无原始登记快照。使用「自动导入」新拉取的数据会带上完整字段；历史数据可在 Supabase 执行{' '}
-          <code className="rounded bg-slate-100 px-1">migration_add_source_raw.sql</code> 后重新导入。
+          暂无原始登记快照。使用「自动导入」新拉取的数据会带上完整字段；若库表缺列，请在 Supabase SQL Editor
+          执行 <code className="rounded bg-slate-100 px-1">supabase/schema.sql</code> 里「已有数据库补列」段落中的{' '}
+          <code className="rounded bg-slate-100 px-1">source_raw</code>（或 <code className="rounded bg-slate-100 px-1">migration_add_source_raw.sql</code>
+          ）后重试导入。
         </CardContent>
       </Card>
     );

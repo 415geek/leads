@@ -24,6 +24,7 @@ import { ScoreBadge } from '@/components/score-badge';
 import { StatusBadge } from '@/components/status-badge';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { dashboardBusinessSearchHref } from '@/lib/dashboard-business-search';
 
 const STATUS_OPTIONS: { value: LeadStatus | 'all'; label: string }[] = [
   { value: 'all', label: '全部状态' },
@@ -199,7 +200,7 @@ export default function LeadsPage() {
                   <TableHead>评分</TableHead>
                   <TableHead>状态</TableHead>
                   <TableHead>开发信</TableHead>
-                  <TableHead></TableHead>
+                  <TableHead className="text-right">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -223,12 +224,22 @@ export default function LeadsPage() {
                         <span className="text-gray-400">未生成</span>
                       )}
                     </TableCell>
-                    <TableCell>
-                      <Link href={`/leads/${lead.id}`}>
-                        <Button variant="outline" size="sm">
-                          查看
-                        </Button>
-                      </Link>
+                    <TableCell className="text-right">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Link href={`/leads/${lead.id}`}>
+                          <Button variant="outline" size="sm">
+                            查看
+                          </Button>
+                        </Link>
+                        <Link
+                          href={dashboardBusinessSearchHref(lead.name, lead.city)}
+                          title="在 Dashboard 打开政府/新闻/社交搜索入口"
+                        >
+                          <Button variant="secondary" size="sm" className="whitespace-nowrap">
+                            商业搜索
+                          </Button>
+                        </Link>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

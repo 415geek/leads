@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
+import { LogoutButton } from "@/components/logout-button";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -27,13 +28,14 @@ export default function RootLayout({
               <span className="text-[#f59e0b]">Restaurant</span>
               <span> Leads Finder</span>
             </h1>
-            <nav className="flex gap-4">
+            <nav className="flex items-center gap-4">
               <a href="/" className="hover:text-[#f59e0b] transition-colors">
                 Dashboard
               </a>
               <a href="/leads" className="hover:text-[#f59e0b] transition-colors">
                 Leads
               </a>
+              <LogoutButton />
             </nav>
           </div>
         </header>
