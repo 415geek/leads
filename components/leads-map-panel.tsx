@@ -1,11 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   CircleMarker,
   MapContainer,
-  Popup,
   TileLayer,
+  Tooltip,
   useMap,
 } from 'react-leaflet';
 import L from 'leaflet';
@@ -16,6 +17,29 @@ import type { LeadMapMarker } from '@/types/lead-map';
 
 const SF_CENTER: [number, number] = [37.7749, -122.4194];
 const DEFAULT_ZOOM = 12;
+
+function formatMapDate(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso.length <= 10 ? `${iso}T12:00:00` : iso);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  return d.toLocaleDateString('zh-CN', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+}
+
+function formatMapAddress(m: LeadMapMarker): string {
+  const a = m.address?.trim();
+  const c = m.city?.trim();
+  if (a && c && !a.toLowerCase().includes(c.toLowerCase().slice(0, 4))) {
+    return `${a}, ${c}`;
+  }
+  if (a) return a;
+  if (c) return c;
+  return '—';
+}
 
 function scoreStroke(score: number): string {
   if (score >= 80) return '#15803d';
@@ -44,6 +68,7 @@ function FitBounds({ markers }: { markers: LeadMapMarker[] }) {
 }
 
 export function LeadsMapPanel() {
+  const router = useRouter();
   const [markers, setMarkers] = useState<LeadMapMarker[]>([]);
   const [scanned, setScanned] = useState(0);
   const [skipped, setSkipped] = useState(0);
@@ -79,14 +104,22 @@ export function LeadsMapPanel() {
     return [lat, lng];
   }, [markers]);
 
+  const goToLead = useCallback(
+    (id: string) => {
+      router.push(`/leads/${id}`);
+    },
+    [router]
+  );
+
   return (
     <Card className="border-[#1e3a5f]/20 overflow-hidden">
       <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <CardTitle className="text-lg text-[#1e3a5f]">Leads 地图</CardTitle>
           <p className="text-sm font-normal text-muted-foreground mt-1">
-            显示带有地理坐标（主要来自 SF 开放数据 <code className="text-xs bg-slate-100 px-1 rounded">source_raw.location</code>）的
-            leads。最多加载 800 条高分记录。
+            标点对应数据库中的地址坐标（<code className="text-xs bg-slate-100 px-1 rounded">source_raw.location</code>）。
+            <strong className="font-medium text-slate-700"> 悬停</strong>圆点可预览店名、登记日期与地址；<strong className="font-medium text-slate-700">点击</strong>
+            圆点进入该 Lead 详情页。
           </p>
         </div>
         <Button type="button" variant="outline" size="sm" onClick={() => load()} disabled={loading}>
@@ -105,7 +138,7 @@ export function LeadsMapPanel() {
             <code className="text-xs bg-slate-100 px-1 rounded">location</code>。
           </p>
         )}
-        <div className="relative h-[min(420px,55vh)] w-full rounded-lg border border-slate-200 z-0">
+        <div className="leads-map-panel relative h-[min(420px,55vh)] w-full rounded-lg border border-slate-200 z-0">
           <MapContainer
             center={center}
             zoom={DEFAULT_ZOOM}
@@ -128,24 +161,34 @@ export function LeadsMapPanel() {
                   fillOpacity: 0.85,
                   weight: 2,
                 }}
+                eventHandlers={{
+                  click: () => goToLead(m.id),
+                }}
               >
-                <Popup>
-                  <div className="min-w-[200px] text-sm">
-                    <div className="font-semibold text-slate-900">{m.name}</div>
-                    <div className="text-xs text-slate-600 mt-1">
-                      评分 {m.lead_score} · {m.lead_status}
+                <Tooltip
+                  direction="top"
+                  offset={[0, -6]}
+                  opacity={1}
+                  sticky
+                  className="!rounded-lg !border !border-slate-200 !bg-white !p-0 !shadow-md [&_.leaflet-tooltip-content]:!m-0"
+                >
+                  <div className="max-w-[260px] px-3 py-2 text-left text-slate-900">
+                    <div className="font-semibold text-sm leading-snug">{m.name}</div>
+                    <div className="mt-1.5 space-y-0.5 text-xs text-slate-600">
+                      <div>
+                        <span className="text-slate-400">登记/执照日期：</span>
+                        {formatMapDate(m.license_date)}
+                      </div>
+                      <div className="break-words">
+                        <span className="text-slate-400">地址：</span>
+                        {formatMapAddress(m)}
+                      </div>
                     </div>
-                    {m.address ? (
-                      <div className="text-xs text-slate-500 mt-1">{m.address}</div>
-                    ) : null}
-                    <a
-                      href={`/leads/${m.id}`}
-                      className="inline-block mt-2 text-xs font-medium text-[#1e3a5f] underline"
-                    >
-                      打开详情 →
-                    </a>
+                    <div className="mt-2 border-t border-slate-100 pt-1.5 text-[11px] text-[#1e3a5f]">
+                      点击查看详情
+                    </div>
                   </div>
-                </Popup>
+                </Tooltip>
               </CircleMarker>
             ))}
           </MapContainer>

@@ -10,7 +10,7 @@ export async function GET() {
   try {
     const { data, error } = await supabaseAdmin
       .from('leads')
-      .select('id, name, address, city, lead_score, lead_status, source_raw')
+      .select('id, name, address, city, license_date, lead_score, lead_status, source_raw')
       .order('lead_score', { ascending: false })
       .limit(MAX_ROWS);
 
@@ -31,6 +31,7 @@ export async function GET() {
         name: row.name,
         address: row.address,
         city: row.city,
+        license_date: row.license_date ?? null,
         lead_score: row.lead_score,
         lead_status: row.lead_status as LeadStatus,
         lat: ll.lat,

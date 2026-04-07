@@ -128,3 +128,8 @@
     @apply font-sans;
   }
 }
+
+/* Dashboard Leads map: markers are clickable */
+.leads-map-panel .leaflet-interactive {
+  cursor: pointer;
+}
