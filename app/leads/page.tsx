@@ -67,8 +67,15 @@ export default function LeadsPage() {
           typeof result.chineseTagged === 'number' && result.chineseTagged > 0
             ? `，含中餐标签 ${result.chineseTagged} 条`
             : '';
+        const src =
+          Array.isArray(result.sources) && result.sources.length > 0
+            ? ` [${result.sources
+                .filter((s: { ok?: boolean }) => s.ok)
+                .map((s: { id?: string }) => s.id)
+                .join(', ')}]`
+            : '';
         toast.success(
-          `新增 ${result.imported} 条餐饮类 leads（本次拉取 ${result.total ?? result.imported} 条${extra}）`,
+          `新增 ${result.imported} 条餐饮类 leads（本次合并拉取 ${result.total ?? result.imported} 条${extra}）${src}`,
         );
         fetchLeads();
       } else {
@@ -132,7 +139,7 @@ export default function LeadsPage() {
           ) : (
             <>
               <span className="mr-2">📥</span>
-              自动导入 SF 餐饮新登记
+              自动导入湾区餐饮数据
             </>
           )}
         </Button>

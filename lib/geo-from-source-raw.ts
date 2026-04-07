@@ -20,7 +20,7 @@ export function extractLatLngFromSourceRaw(raw: unknown): LatLng | null {
   if (!raw || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
 
-  const location = o.location;
+  const location = o.location ?? o.business_location;
   if (location && typeof location === 'object' && location !== null) {
     const loc = location as Record<string, unknown>;
     if (loc.type === 'Point' && Array.isArray(loc.coordinates)) {

@@ -10,6 +10,14 @@ describe('extractLatLngFromSourceRaw', () => {
     expect(extractLatLngFromSourceRaw(raw)).toEqual({ lat: 37.7749, lng: -122.4194 });
   });
 
+  it('parses GeoJSON Point on business_location (Berkeley-style)', () => {
+    const raw = {
+      dba: 'Cafe',
+      business_location: { type: 'Point', coordinates: [-122.2727, 37.8715] },
+    };
+    expect(extractLatLngFromSourceRaw(raw)).toEqual({ lat: 37.8715, lng: -122.2727 });
+  });
+
   it('parses latitude/longitude fields', () => {
     expect(
       extractLatLngFromSourceRaw({ latitude: 37.5, longitude: -122.2 })
