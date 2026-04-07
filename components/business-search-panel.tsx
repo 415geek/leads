@@ -137,6 +137,14 @@ function BusinessSearchPanelInner() {
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex h-full flex-col rounded-lg border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:border-[#1e3a5f]/40 hover:bg-slate-50/80"
+                          onClick={() => {
+                            const text = item.clipboardTextOnOpen?.trim();
+                            if (text) {
+                              void navigator.clipboard.writeText(text).catch(() => {
+                                /* 部分环境无剪贴板权限时静默忽略 */
+                              });
+                            }
+                          }}
                         >
                           <span className="text-sm font-medium text-[#1e3a5f]">{item.label}</span>
                           <span className="mt-1 text-xs text-muted-foreground leading-snug">

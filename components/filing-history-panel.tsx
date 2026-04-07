@@ -24,9 +24,12 @@ function formatFiledDate(iso: string | null): string {
 export function FilingHistoryPanel({
   leadId,
   entityNumber,
+  businessName,
 }: {
   leadId: string;
   entityNumber?: string | null;
+  /** 打开 BizFile 时复制到剪贴板，便于粘贴搜索 */
+  businessName?: string | null;
 }) {
   const [filings, setFilings] = useState<LeadFiling[]>([]);
   const [loading, setLoading] = useState(true);
@@ -130,6 +133,17 @@ export function FilingHistoryPanel({
             target="_blank"
             rel="noopener noreferrer"
             className="text-[#1e3a5f] underline font-medium"
+            title={
+              businessName?.trim()
+                ? '点击打开官方页，并复制该 Lead 店名到剪贴板，在站内搜索框粘贴即可'
+                : undefined
+            }
+            onClick={() => {
+              const n = businessName?.trim();
+              if (n) {
+                void navigator.clipboard.writeText(n).catch(() => {});
+              }
+            }}
           >
             打开 CA BizFile 搜索 ↗
           </a>

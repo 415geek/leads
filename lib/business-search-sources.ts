@@ -17,6 +17,11 @@ export interface BusinessSearchLink {
   description: string;
   url: string;
   category: BusinessSearchCategoryId;
+  /**
+   * 点击打开链接时写入剪贴板（用于官方站点不支持 URL 预填时，如 CA BizFile）。
+   * 需在用户点击的同一次手势内调用，以避免被浏览器拦截。
+   */
+  clipboardTextOnOpen?: string;
 }
 
 const CATEGORIES: BusinessSearchCategory[] = [
@@ -75,9 +80,11 @@ export function buildBusinessSearchLinks(
     {
       id: 'ca-sos-bizfile',
       label: 'CA BizFile Online（企业搜索入口）',
-      description: 'California Secretary of State 官方企业查询入口；若链接未自动带出结果，请在页面内用企业名搜索。',
+      description:
+        'California Secretary of State 官方企业查询。点击卡片时会自动把上方填写的企业名复制到剪贴板；BizFile 打开后在搜索框粘贴（Cmd/Ctrl+V）即可检索。',
       url: 'https://bizfileonline.sos.ca.gov/search/business',
       category: 'sos',
+      clipboardTextOnOpen: businessName.trim(),
     },
     {
       id: 'ca-sos-search-google',

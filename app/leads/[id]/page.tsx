@@ -343,6 +343,7 @@ export default function LeadDetailPage({
 
       <FilingHistoryPanel
         leadId={id}
+        businessName={lead.name}
         entityNumber={
           entityNumber.trim() !== ''
             ? entityNumber.trim()
