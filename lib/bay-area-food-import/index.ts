@@ -1,10 +1,11 @@
 /**
  * 湾区餐饮线索：多市政开放数据聚合。
  *
- * 分析师优先级：SF「新 location_start_date」为最强销售时机信号；
- * Berkeley 为有效执照快照（无登记日），用于覆盖东湾核心城区。
+ * DataSF g8m3-pdis：经 SF 税务登记的企业，实地 `city` 可覆盖九县常见城市（白名单 + CA）；
+ * 近 `location_start_date` 仍是最强销售时机信号。
+ * Berkeley rwnf-bu3w：市内有效执照快照（无登记日），补伯克利本地执照口径。
  *
- * Oakland 门户暂无与 SF g8m3-pdis 同级的「新登记 + 餐饮」单表；San José 门户为 CKAN，需另接 API。
+ * 其他市专属门户（如 San José CKAN、Oakland 异构目录）可再挂独立 fetcher。
  */
 
 export * from './shared';

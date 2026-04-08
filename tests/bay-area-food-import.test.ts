@@ -6,9 +6,12 @@ import {
 } from '@/lib/bay-area-food-import/shared';
 
 describe('bay-area-food-import shared', () => {
-  it('SF where clause pins city and date', () => {
+  it('SF where clause uses CA + Bay Area city whitelist and date', () => {
     const w = buildSfFoodServiceWhereClause('2025-01-01');
-    expect(w).toContain("city = 'San Francisco'");
+    expect(w).toContain("state = 'CA'");
+    expect(w).toContain('upper(trim(city)) in');
+    expect(w).toContain("'SAN FRANCISCO'");
+    expect(w).toContain("'OAKLAND'");
     expect(w).toContain("location_start_date >= '2025-01-01'");
     expect(w).toContain('722%');
   });

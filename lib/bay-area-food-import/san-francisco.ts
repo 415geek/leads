@@ -2,7 +2,7 @@ import { calculateLeadScore } from '@/lib/scoring';
 import type { Lead } from '@/types/lead';
 import { sfG8m3DisplayName, sfG8m3LegalNameForCuisine, type SfG8m3Shape } from '@/lib/sf-data-sf-fields';
 import {
-  FETCH_LIMIT,
+  SF_G8M3_FETCH_LIMIT,
   buildCuisineLabel,
   buildSfFoodServiceWhereClause,
   pickText,
@@ -31,11 +31,12 @@ export async function fetchSanFranciscoFoodLeads(
   sinceDate: string
 ): Promise<{ result: SourceFetchResult; leads: (FoodLeadDraft & { lead_score: number })[] }> {
   const id = 'sf_gov';
-  const label = 'San Francisco（新登记 · DataSF g8m3-pdis）';
+  const label =
+    'DataSF g8m3-pdis（湾区实地城市 · SF 税务登记，近 location_start_date）';
 
   const params = new URLSearchParams({
     $where: buildSfFoodServiceWhereClause(sinceDate),
-    $limit: String(FETCH_LIMIT),
+    $limit: String(SF_G8M3_FETCH_LIMIT),
     $order: 'location_start_date DESC',
   });
 
@@ -74,12 +75,15 @@ export async function fetchSanFranciscoFoodLeads(
         pickText(record.lic_code_descriptions_list) ||
         pickText(record.lic);
 
+      const cityFromRecord =
+        pickText(record.city)?.replace(/\s+/g, ' ').trim() || null;
+
       const draft: FoodLeadDraft = {
         name,
         address: record.full_business_address || null,
         phone: record.business_phone || null,
         cuisine_type: cuisineType,
-        city: 'San Francisco',
+        city: cityFromRecord || 'San Francisco',
         source: 'sf_gov',
         license_date: licenseDate ? String(licenseDate).split('T')[0] : null,
         license_type: licenseType,

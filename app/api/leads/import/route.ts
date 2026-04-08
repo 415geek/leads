@@ -68,10 +68,10 @@ export async function GET() {
     sources: [
       {
         id: 'sf_gov',
-        city: 'San Francisco',
+        city: 'Bay Area（DataSF，实地城市）',
         kind: 'new_business_location',
         dataset: 'https://data.sfgov.org/resource/g8m3-pdis.json',
-        note: `近 ${LOOKBACK_DAYS} 天内 location_start_date，餐饮 NAICS/执照筛选`,
+        note: `近 ${LOOKBACK_DAYS} 天 location_start_date；state=CA 且 city 为湾区白名单（九县及周边常见市）；餐饮 NAICS/执照筛选；lead.city 取记录 city`,
       },
       {
         id: 'berkeley_open_data',
@@ -82,9 +82,9 @@ export async function GET() {
       },
       {
         id: 'planned',
-        city: 'Oakland / San Jose / …',
-        kind: 'pending',
-        note: 'Oakland 需另找对标数据集；San José 门户为 CKAN，需单独对接',
+        city: 'Oakland 门户 / San José CKAN / …',
+        kind: 'optional_extra',
+        note: '与 g8m3 重叠度低的市专属源可再接入；Oakland 需对标数据集；San José 为 CKAN API',
       },
     ],
   });

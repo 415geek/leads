@@ -1,8 +1,11 @@
 import type { LeadSourceRaw } from '@/types/lead';
+import { buildBayAreaCityUpperInListSoql } from './bay-area-cities-data-sf';
 
 /** 与 SF 导入一致：近 N 天 + 单次上限 */
 export const LOOKBACK_DAYS = 30;
 export const FETCH_LIMIT = 500;
+/** DataSF g8m3 覆盖全湾区白名单城市后，近期餐饮行数可能更多 */
+export const SF_G8M3_FETCH_LIMIT = 1200;
 
 export function pickText(v: unknown): string | null {
   if (v == null) return null;
@@ -58,6 +61,7 @@ export function buildCuisineLabel(parts: {
 }
 
 export function buildSfFoodServiceWhereClause(sinceDate: string): string {
+  const citiesIn = buildBayAreaCityUpperInListSoql();
   const food =
     `naic_code like '722%' ` +
     `OR naic_code like '%722%' ` +
@@ -78,7 +82,8 @@ export function buildSfFoodServiceWhereClause(sinceDate: string): string {
     `OR lic_code_description like '%DINING%'`;
 
   return (
-    `city = 'San Francisco' ` +
+    `state = 'CA' ` +
+    `AND upper(trim(city)) in (${citiesIn}) ` +
     `AND location_start_date >= '${sinceDate}' ` +
     `AND (${food})`
   );
