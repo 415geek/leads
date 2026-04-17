@@ -3,12 +3,32 @@ import { supabaseAdmin } from '@/lib/supabase';
 import {
   LOOKBACK_DAYS,
   countChineseTagged,
-  runBayAreaFoodImport,
 } from '@/lib/bay-area-food-import';
+import type { LeadRegionId } from '@/lib/region-config';
+import { runFoodImportForRegion } from '@/lib/regional-food-import';
 
-export async function POST() {
+function parseRegion(body: unknown): LeadRegionId {
+  if (
+    body &&
+    typeof body === 'object' &&
+    'region' in body &&
+    (body as { region?: string }).region === 'houston'
+  ) {
+    return 'houston';
+  }
+  return 'bay_area';
+}
+
+export async function POST(request: Request) {
   try {
-    const { sinceDate, sourceResults, leads } = await runBayAreaFoodImport();
+    let body: unknown = {};
+    try {
+      body = await request.json();
+    } catch {
+      body = {};
+    }
+    const region = parseRegion(body);
+    const { sinceDate, sourceResults, leads } = await runFoodImportForRegion(region);
 
     if (leads.length === 0) {
       const anyOk = sourceResults.some((s) => s.ok);
@@ -21,6 +41,7 @@ export async function POST() {
         total: 0,
         chineseTagged: 0,
         sinceDate,
+        region,
         sources: sourceResults,
       });
     }
@@ -47,6 +68,7 @@ export async function POST() {
       total: leads.length,
       chineseTagged,
       sinceDate,
+      region,
       sources: sourceResults,
     });
   } catch (error) {
@@ -63,29 +85,42 @@ export async function POST() {
 
 export async function GET() {
   return NextResponse.json({
-    message: 'Use POST to import food-service leads from Bay Area open data portals',
+    message:
+      'POST JSON {"region":"bay_area"|"houston"} 从对应开放数据导入餐饮线索；缺省为 bay_area',
     lookbackDaysSf: LOOKBACK_DAYS,
-    sources: [
-      {
-        id: 'sf_gov',
-        city: 'Bay Area（DataSF，实地城市）',
-        kind: 'new_business_location',
-        dataset: 'https://data.sfgov.org/resource/g8m3-pdis.json',
-        note: `近 ${LOOKBACK_DAYS} 天 location_start_date；state=CA 且 city 为湾区白名单（九县及周边常见市）；餐饮 NAICS/执照筛选；lead.city 取记录 city`,
+    regions: {
+      bay_area: {
+        portal: 'https://data.sfgov.org/',
+        sources: [
+          {
+            id: 'sf_gov',
+            city: 'Bay Area（DataSF，实地城市）',
+            kind: 'new_business_location',
+            dataset: 'https://data.sfgov.org/resource/g8m3-pdis.json',
+            note: `近 ${LOOKBACK_DAYS} 天 location_start_date；state=CA 且 city 为湾区白名单；餐饮 NAICS/执照筛选`,
+          },
+          {
+            id: 'berkeley_open_data',
+            city: 'Berkeley',
+            kind: 'active_license_snapshot',
+            dataset: 'https://data.cityofberkeley.info/resource/rwnf-bu3w.json',
+            note: '当前有效餐饮相关执照快照',
+          },
+        ],
       },
-      {
-        id: 'berkeley_open_data',
-        city: 'Berkeley',
-        kind: 'active_license_snapshot',
-        dataset: 'https://data.cityofberkeley.info/resource/rwnf-bu3w.json',
-        note: '无登记日期列；导入为当前有效餐饮相关执照，license_date 为空，评分偏「覆盖」而非「时效」',
+      houston: {
+        portal: 'https://data.houstontx.gov/',
+        sources: [
+          {
+            id: 'houston_hdhhs',
+            kind: 'ckan_datastore_sql',
+            dataset:
+              'City of Houston HDHHS — Last Facility Inspection（餐饮相关 FACILITY TYPE）',
+            api: 'https://data.houstontx.gov/api/3/action/datastore_search_sql',
+            note: '门户检索见 https://data.houstontx.gov/dataset?q=business — 本导入使用健康部门食品设施检查登记（历史快照，日期待核对）',
+          },
+        ],
       },
-      {
-        id: 'planned',
-        city: 'Oakland 门户 / San José CKAN / …',
-        kind: 'optional_extra',
-        note: '与 g8m3 重叠度低的市专属源可再接入；Oakland 需对标数据集；San José 为 CKAN API',
-      },
-    ],
+    },
   });
 }

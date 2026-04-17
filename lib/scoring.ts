@@ -47,6 +47,7 @@ export function calculateLeadScore(lead: Partial<Lead>): number {
     'Berkeley': 10,
     'Palo Alto': 10,
     'Mountain View': 10,
+    Houston: 15,
   };
   score += cityScores[lead.city || ''] || 5;
   

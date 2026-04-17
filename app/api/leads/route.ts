@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { LeadFilters } from '@/types/lead';
+import type { LeadRegionId } from '@/lib/region-config';
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,6 +11,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '25');
     const status = searchParams.get('status') as LeadFilters['status'];
     const city = searchParams.get('city');
+    const region = searchParams.get('region') as LeadRegionId | 'all' | null;
     const cuisineType = searchParams.get('cuisine_type');
     const minScore = searchParams.get('min_score');
     const search = searchParams.get('search');
@@ -22,6 +24,11 @@ export async function GET(request: NextRequest) {
 
     if (status) {
       query = query.eq('lead_status', status);
+    }
+    if (region === 'bay_area') {
+      query = query.in('source', ['sf_gov', 'berkeley_open_data']);
+    } else if (region === 'houston') {
+      query = query.eq('source', 'houston_hdhhs');
     }
     if (city) {
       query = query.eq('city', city);

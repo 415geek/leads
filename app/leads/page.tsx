@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
@@ -25,6 +25,13 @@ import { StatusBadge } from '@/components/status-badge';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { dashboardBusinessSearchHref } from '@/lib/dashboard-business-search';
+import {
+  LEADS_REGION_STORAGE_KEY,
+  REGION_OPTIONS,
+  cityOptionsForRegion,
+  type LeadRegionFilterId,
+  type LeadRegionId,
+} from '@/lib/region-config';
 
 const STATUS_OPTIONS: { value: LeadStatus | 'all'; label: string }[] = [
   { value: 'all', label: '全部状态' },
@@ -33,15 +40,6 @@ const STATUS_OPTIONS: { value: LeadStatus | 'all'; label: string }[] = [
   { value: 'in_progress', label: '跟进中' },
   { value: 'converted', label: '已成交' },
   { value: 'not_interested', label: '无意向' },
-];
-
-const CITY_OPTIONS = [
-  { value: 'all', label: '全部城市' },
-  { value: 'San Francisco', label: 'San Francisco' },
-  { value: 'Oakland', label: 'Oakland' },
-  { value: 'San Jose', label: 'San Jose' },
-  { value: 'Fremont', label: 'Fremont' },
-  { value: 'Berkeley', label: 'Berkeley' },
 ];
 
 export default function LeadsPage() {
@@ -53,12 +51,19 @@ export default function LeadsPage() {
   const [city, setCity] = useState<string>('all');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [region, setRegion] = useState<LeadRegionFilterId>('bay_area');
+  const regionHydrated = useRef(false);
+
+  const importRegion: LeadRegionId =
+    region === 'all' ? 'bay_area' : region;
 
   const handleImport = async () => {
     setImporting(true);
     try {
       const response = await fetch('/api/leads/import', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ region: importRegion }),
       });
       const result = await response.json();
       
@@ -74,8 +79,12 @@ export default function LeadsPage() {
                 .map((s: { id?: string }) => s.id)
                 .join(', ')}]`
             : '';
+        const r =
+          result.region === 'houston'
+            ? '休斯顿'
+            : '湾区';
         toast.success(
-          `新增 ${result.imported} 条餐饮类 leads（本次合并拉取 ${result.total ?? result.imported} 条${extra}）${src}`,
+          `【${r}】新增 ${result.imported} 条餐饮类 leads（本次合并拉取 ${result.total ?? result.imported} 条${extra}）${src}`,
         );
         fetchLeads();
       } else {
@@ -101,6 +110,7 @@ export default function LeadsPage() {
       if (search) params.append('search', search);
       if (status !== 'all') params.append('status', status);
       if (city !== 'all') params.append('city', city);
+      if (region !== 'all') params.append('region', region);
       
       const response = await fetch(`/api/leads?${params}`);
       const result = await response.json();
@@ -112,7 +122,28 @@ export default function LeadsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, status, city]);
+  }, [page, search, status, city, region]);
+
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem(LEADS_REGION_STORAGE_KEY);
+      if (s === 'houston' || s === 'bay_area' || s === 'all') {
+        setRegion(s);
+      }
+    } catch {
+      /* ignore */
+    }
+    regionHydrated.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!regionHydrated.current) return;
+    try {
+      localStorage.setItem(LEADS_REGION_STORAGE_KEY, region);
+    } catch {
+      /* ignore */
+    }
+  }, [region]);
 
   useEffect(() => {
     fetchLeads();
@@ -120,16 +151,20 @@ export default function LeadsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, status, city]);
+  }, [search, status, city, region]);
+
+  useEffect(() => {
+    setCity('all');
+  }, [region]);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-2xl font-bold text-[#1e3a5f]">Leads 列表</h2>
         <Button 
           onClick={handleImport} 
           disabled={importing}
-          className="bg-[#1e3a5f] hover:bg-[#2d4a6f]"
+          className="bg-[#1e3a5f] hover:bg-[#2d4a6f] shrink-0"
         >
           {importing ? (
             <>
@@ -139,7 +174,9 @@ export default function LeadsPage() {
           ) : (
             <>
               <span className="mr-2">📥</span>
-              自动导入湾区餐饮数据
+              {importRegion === 'houston'
+                ? '从休斯顿开放数据导入餐饮登记'
+                : '从湾区开放数据导入餐饮登记'}
             </>
           )}
         </Button>
@@ -150,7 +187,37 @@ export default function LeadsPage() {
           <CardTitle className="text-lg">筛选</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-4">
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-muted-foreground">
+              选择地区后，列表与导入会对齐对应政府开放数据门户（休斯顿为{' '}
+              <a
+                href="https://data.houstontx.gov/dataset?q=business&sort=score+desc%2C+metadata_modified+desc"
+                className="text-[#1e3a5f] underline underline-offset-2"
+                target="_blank"
+                rel="noreferrer"
+              >
+                data.houstontx.gov
+              </a>
+              ，经 CKAN API 拉取 HDHHS 食品服务设施登记）。
+            </p>
+            <div className="flex flex-wrap gap-4">
+            <Select
+              value={region}
+              onValueChange={(v) => v && setRegion(v as LeadRegionFilterId)}
+            >
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="地区" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部地区</SelectItem>
+                {REGION_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.id} value={opt.id}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             <Input
               placeholder="搜索餐厅名或地址..."
               value={search}
@@ -172,17 +239,18 @@ export default function LeadsPage() {
             </Select>
             
             <Select value={city} onValueChange={(v) => v && setCity(v)}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-44">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {CITY_OPTIONS.map((option) => (
+                {cityOptionsForRegion(region).map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            </div>
           </div>
         </CardContent>
       </Card>
