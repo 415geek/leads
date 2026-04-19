@@ -86,6 +86,22 @@ describe('supabase/schema.sql is idempotent', () => {
     expect(sql).toMatch(/on leads \(source, external_id\)/);
   });
 
+  it('CRITICAL REGRESSION: idx_leads_source_external MUST NOT be a partial index', () => {
+    // Partial unique index (with WHERE) 会破坏 Supabase .upsert({ onConflict: 'source,external_id' })
+    // 因为 PostgREST 生成 ON CONFLICT (source, external_id) 不会匹配 partial index。
+    // 必须保持普通 unique index。
+    const idxStmt = stmts.find((s) =>
+      /create unique index if not exists idx_leads_source_external/.test(s),
+    );
+    expect(idxStmt, 'idx_leads_source_external statement must exist').toBeTruthy();
+    expect(idxStmt!).not.toMatch(/\bwhere\b/);
+  });
+
+  it('drops and recreates idx_leads_source_external (migration correctness)', () => {
+    // 已跑过老 partial 版本的库需要先 drop 再建新的
+    expect(sql).toMatch(/drop index if exists idx_leads_source_external/);
+  });
+
   it('V1 migration backfills metro_area for existing rows', () => {
     expect(sql).toMatch(/update leads set metro_area = 'sf_bay'/);
     expect(sql).toMatch(/update leads set metro_area = 'houston'/);

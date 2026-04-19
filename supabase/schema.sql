@@ -125,12 +125,18 @@ comment on column leads.ai_classification is 'AI 分类完整输出 JSON（模�
 --    Postgres 为 `unique(name, address)` 自动生成 leads_name_address_key
 alter table leads drop constraint if exists leads_name_address_key;
 
--- 2a. 新主去重键：(source, external_id) — 只对有 external_id 的行生效
+-- 2a. 新主去重键：(source, external_id)
+--     不能用 partial index（where external_id is not null）——Supabase .upsert({onConflict:'source,external_id'})
+--     会生成 ON CONFLICT (source, external_id)，PostgREST 不支持 partial index 的 WHERE 子句，会报
+--     "no unique or exclusion constraint matching the ON CONFLICT specification"。
+--     改用普通 unique index：Postgres 默认 NULLS DISTINCT，(sf_gov, NULL) 多行互不相同，
+--     功能上与 partial index 等价。
+drop index if exists idx_leads_source_external;
 create unique index if not exists idx_leads_source_external
-  on leads (source, external_id)
-  where external_id is not null;
+  on leads (source, external_id);
 
 -- 2b. 回落去重键：(lower(name), lower(address), lower(city)) — 兼容 n8n 旧 payload 与历史数据
+--     保留 partial index（这里不走 ON CONFLICT 路径，是应用层查重 + 单条 insert 用的）
 create unique index if not exists idx_leads_name_address_city_lower
   on leads (lower(name), lower(coalesce(address, '')), lower(city))
   where external_id is null;
