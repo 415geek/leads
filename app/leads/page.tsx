@@ -30,7 +30,6 @@ import {
   REGION_OPTIONS,
   cityOptionsForRegion,
   type LeadRegionFilterId,
-  type LeadRegionId,
 } from '@/lib/region-config';
 import { METRO_CONFIGS } from '@/lib/sources/metro-config';
 
@@ -59,57 +58,113 @@ export default function LeadsPage() {
   const [minConfidence, setMinConfidence] = useState<string>('all');
   const regionHydrated = useRef(false);
 
-  // region='all' → 按 metro='all' 跑全部启用源；否则按单城
-  const importPayload: { metro: LeadRegionId | 'all' } =
-    region === 'all' ? { metro: 'all' } : { metro: region };
-
   const importLabel =
     region === 'all'
       ? '导入全部启用城市'
       : `从${METRO_CONFIGS.find((m) => m.id === region)?.shortLabel ?? region}开放数据导入`;
 
+  const [importProgress, setImportProgress] = useState<{ done: number; total: number; current?: string } | null>(null);
+
+  /**
+   * 导入流程：
+   *   - region='all' 时：先 GET ?listSources=1 拿源 id → 逐个 POST {sourceId} → 每成功一个就刷表 + toast 进度
+   *   - region=specific 时：直接 POST {metro} 一次
+   * 关键：每个请求只处理一个源，避免 Vercel 函数超时（旧版 metro=all 同步跑 6 源导致 504）
+   */
   const handleImport = async () => {
     setImporting(true);
+    setImportProgress(null);
     try {
-      const response = await fetch('/api/leads/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(importPayload),
-      });
-      const result = await response.json();
+      let sourceIds: string[] = [];
 
-      // 即使失败也展示每源明细（方便诊断）
-      const srcList: Array<{ id?: string; ok?: boolean; fetched?: number; error?: string }> =
-        Array.isArray(result.sources) ? result.sources : [];
-      const okParts = srcList
-        .filter((s) => s.ok)
-        .map((s) => `${s.id}:${s.fetched ?? 0}`);
-      const failParts = srcList
-        .filter((s) => !s.ok)
-        .map((s) => `${s.id}:${s.error ?? 'fail'}`);
+      if (region === 'all') {
+        // 先拿源列表
+        const listRes = await fetch('/api/leads/import?listSources=1');
+        const listJson = await listRes.json();
+        sourceIds = Array.isArray(listJson.sourceIds) ? listJson.sourceIds : [];
+        if (sourceIds.length === 0) {
+          toast.error('没有启用的数据源');
+          return;
+        }
+      }
 
-      if (result.success) {
-        const extra =
-          typeof result.chineseTagged === 'number' && result.chineseTagged > 0
-            ? `，含中餐标签 ${result.chineseTagged} 条`
-            : '';
-        const dropped =
-          typeof result.droppedNonRestaurant === 'number' && result.droppedNonRestaurant > 0
-            ? `，AI 丢弃非餐厅 ${result.droppedNonRestaurant} 条`
-            : '';
-        const srcOk = okParts.length ? ` ✓[${okParts.join(', ')}]` : '';
-        const srcFail = failParts.length ? ` ✗[${failParts.join(', ')}]` : '';
+      const totalImported: { imported: number; byId: Record<string, { ok: boolean; imported?: number; fetched?: number; error?: string }> } = {
+        imported: 0,
+        byId: {},
+      };
+
+      if (region === 'all') {
+        setImportProgress({ done: 0, total: sourceIds.length });
+        let hintShown = false;
+        for (let i = 0; i < sourceIds.length; i++) {
+          const id = sourceIds[i];
+          setImportProgress({ done: i, total: sourceIds.length, current: id });
+          try {
+            const response = await fetch('/api/leads/import', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sourceId: id }),
+            });
+            const result = await response.json();
+            const srcRow = Array.isArray(result.sources) ? result.sources[0] : null;
+            const ok = result.success && srcRow?.ok !== false;
+            totalImported.imported += typeof result.imported === 'number' ? result.imported : 0;
+            totalImported.byId[id] = {
+              ok,
+              imported: result.imported,
+              fetched: srcRow?.fetched,
+              error: ok ? undefined : result.error ?? srcRow?.error ?? 'fail',
+            };
+            if (result.hint && !hintShown) {
+              toast.info(`提示：${result.hint}`, { duration: 10000 });
+              hintShown = true;
+            }
+            if (ok) {
+              toast.success(`${id}：新增 ${result.imported ?? 0}（抓取 ${srcRow?.fetched ?? 0}）`, { duration: 3000 });
+              fetchLeads();
+            } else {
+              toast.error(`${id}：${totalImported.byId[id].error}`, { duration: 6000 });
+            }
+          } catch (err) {
+            totalImported.byId[id] = { ok: false, error: err instanceof Error ? err.message : 'network' };
+            toast.error(`${id}：网络错误`, { duration: 6000 });
+          }
+        }
+        setImportProgress({ done: sourceIds.length, total: sourceIds.length });
+
+        const okList = Object.entries(totalImported.byId).filter(([, v]) => v.ok).map(([k, v]) => `${k}:${v.imported ?? 0}`);
+        const failList = Object.entries(totalImported.byId).filter(([, v]) => !v.ok).map(([k, v]) => `${k}:${v.error ?? 'fail'}`);
         toast.success(
-          `新增 ${result.imported} 条（合并拉取 ${
-            result.total ?? result.imported
-          } 条${extra}${dropped}）${srcOk}${srcFail}`,
-          { duration: 8000 },
+          `全部启用城市完成 — 共新增 ${totalImported.imported} 条 ✓[${okList.join(', ')}]${failList.length ? ` ✗[${failList.join(', ')}]` : ''}`,
+          { duration: 10000 },
         );
-        fetchLeads();
       } else {
-        const hint = result.hint ? `\n提示：${result.hint}` : '';
-        const srcFail = failParts.length ? `\n失败源：${failParts.join(', ')}` : '';
-        toast.error(`${result.error || '导入失败'}${hint}${srcFail}`, { duration: 12000 });
+        // 单 metro：后端跑该 metro 的所有源（通常 1–2 个）
+        const response = await fetch('/api/leads/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ metro: region }),
+        });
+        const result = await response.json();
+        const srcList: Array<{ id?: string; ok?: boolean; fetched?: number; error?: string }> =
+          Array.isArray(result.sources) ? result.sources : [];
+        const okParts = srcList.filter((s) => s.ok).map((s) => `${s.id}:${s.fetched ?? 0}`);
+        const failParts = srcList.filter((s) => !s.ok).map((s) => `${s.id}:${s.error ?? 'fail'}`);
+
+        if (result.success) {
+          const srcOk = okParts.length ? ` ✓[${okParts.join(', ')}]` : '';
+          const srcFail = failParts.length ? ` ✗[${failParts.join(', ')}]` : '';
+          toast.success(
+            `新增 ${result.imported ?? 0} 条（抓取 ${result.total ?? 0}）${srcOk}${srcFail}`,
+            { duration: 8000 },
+          );
+          if (result.hint) toast.info(`提示：${result.hint}`, { duration: 10000 });
+          fetchLeads();
+        } else {
+          const hint = result.hint ? `\n提示：${result.hint}` : '';
+          const srcFail = failParts.length ? `\n失败源：${failParts.join(', ')}` : '';
+          toast.error(`${result.error || '导入失败'}${hint}${srcFail}`, { duration: 12000 });
+        }
       }
     } catch {
       toast.error('网络错误，请稍后重试');
@@ -194,7 +249,11 @@ export default function LeadsPage() {
           {importing ? (
             <>
               <span className="animate-spin mr-2">⟳</span>
-              导入中...
+              {importProgress
+                ? `导入中 ${importProgress.done}/${importProgress.total}${
+                    importProgress.current ? ` · ${importProgress.current}` : ''
+                  }`
+                : '导入中...'}
             </>
           ) : (
             <>

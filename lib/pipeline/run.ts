@@ -58,17 +58,26 @@ export interface PipelineRunResult {
 export interface PipelineOptions {
   /** 只跑指定源；为空 → 跑 registry 里所有 enabled 源 */
   sourceIds?: string[];
+  /** 语法糖：只跑一个源 —— 等价于 sourceIds: [id]，让调用点更清晰 */
+  singleSourceId?: string;
   /** lookback 天数；默认 30 */
   lookbackDays?: number;
-  /** skipClassify/skipEnrich 仅用于测试 & Phase 1 兼容 */
+  /**
+   * skipClassify/skipEnrich：
+   *   - 交互式 import 默认 true（跳过，避免 Vercel 函数超时；AI 留给后续 reclassify 任务）
+   *   - cron 或 /reclassify 路径可显式设为 false
+   */
   skipClassify?: boolean;
   skipEnrich?: boolean;
 }
 
 function selectSources(opts: PipelineOptions): readonly FoodDataSource[] {
   const all = enabledSources();
-  if (!opts.sourceIds?.length) return all;
-  return all.filter((s) => opts.sourceIds!.includes(s.id));
+  const ids: string[] | undefined = opts.singleSourceId
+    ? [opts.singleSourceId]
+    : opts.sourceIds;
+  if (!ids?.length) return all;
+  return all.filter((s) => ids.includes(s.id));
 }
 
 function computeSinceDate(lookbackDays: number): string {

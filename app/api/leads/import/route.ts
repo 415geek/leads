@@ -1,12 +1,38 @@
+/**
+ * /api/leads/import —— 单源 / 单 metro / 列出源 三种模式
+ *
+ * 数据流：
+ *
+ *   client POST {sourceId} ──▶ decideImportMode → runPipeline({singleSourceId})
+ *                                    ↓
+ *                           writePipelineLeads (缺列自动降级)
+ *                                    ↓
+ *                             返回 sources[] + imported 计数
+ *
+ * 默认 skipClassify=true / skipEnrich=true（AI 分类 + Google Places 慢，放后续任务）
+ *
+ * 模式决策（详见 lib/pipeline/api-helpers.ts decideImportMode）：
+ *   body.sourceId  → 单源（前端循环用，每次 <15s）
+ *   body.metro=X   → 跑 metro X 下所有源
+ *   body.metro=all → 仅返回 sourceIds 列表，由前端 loop 回来逐个调（不再同步执行全部）
+ *   GET ?listSources=1 → 仅返回列表（给前端 loop 起手）
+ */
+
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { enabledMetros, enabledSources, sourcesForMetro } from '@/lib/sources/registry';
+import {
+  enabledMetros,
+  enabledSources,
+  getSourceById,
+  sourcesForMetro,
+} from '@/lib/sources/registry';
 import { runPipeline } from '@/lib/pipeline/run';
 import { dedupePipelineLeads } from '@/lib/pipeline/dedupe';
-import { parseMetroInput, CHINESE_TAGS } from '@/lib/pipeline/api-helpers';
+import { writePipelineLeads } from '@/lib/pipeline/write-leads';
+import { decideImportMode, CHINESE_TAGS } from '@/lib/pipeline/api-helpers';
 
-// 跨城导入 + Socrata 并发可能较慢；放大 maxDuration
-export const maxDuration = 120;
+// 单源 import 目标 ≤15s；设 60s 足够应付最慢源 + Supabase upsert
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   try {
@@ -17,37 +43,53 @@ export async function POST(request: Request) {
       body = {};
     }
 
-    // 支持 metro='all'：跑 registry 里所有 enabled 源
-    const rawMetro =
-      body && typeof body === 'object'
-        ? (body as { metro?: string; region?: string }).metro ??
-          (body as { metro?: string; region?: string }).region
-        : undefined;
+    const decision = decideImportMode(body, {
+      enabledMetros: () => enabledMetros(),
+      sourcesForMetro: (m) => sourcesForMetro(m),
+      enabledSourceIds: () => enabledSources().map((s) => s.id),
+      sourceExists: (id) => !!getSourceById(id),
+    });
 
-    let metro: string;
-    let sourceIds: string[];
-
-    if (rawMetro === 'all') {
-      metro = 'all';
-      sourceIds = enabledSources().map((s) => s.id);
-    } else {
-      const parsed = parseMetroInput(body, enabledMetros()) ?? 'sf_bay';
-      metro = parsed;
-      sourceIds = sourcesForMetro(parsed).map((s) => s.id);
+    if (decision.mode === 'invalid') {
+      return NextResponse.json(
+        { success: false, error: decision.reason ?? 'invalid request' },
+        { status: 400 },
+      );
     }
 
-    const { sinceDate, sourceResults, leads, droppedNonRestaurant, enrichmentCalls } =
-      await runPipeline({ sourceIds });
+    // list 模式：只返回启用源 id 列表，让前端自己循环
+    if (decision.mode === 'list') {
+      return NextResponse.json({
+        success: true,
+        mode: 'list',
+        metro: 'all',
+        sourceIds: decision.sourceIds,
+        message: `共 ${decision.sourceIds.length} 个启用源；请前端逐个调用 POST {"sourceId":"<id>"}`,
+      });
+    }
 
-    // pipeline 层已 normalize + classify + enrich + score，这里仅做 (source, external_id) 内存去重
+    // single / metro 模式：实际跑 pipeline
+    const {
+      sinceDate,
+      sourceResults,
+      leads,
+      droppedNonRestaurant,
+      enrichmentCalls,
+    } = await runPipeline({
+      sourceIds: decision.sourceIds,
+      skipClassify: true,
+      skipEnrich: true,
+    });
+
     const deduped: typeof leads = dedupePipelineLeads(leads);
 
     if (deduped.length === 0) {
       const anyOk = sourceResults.some((s) => s.ok);
       return NextResponse.json({
         success: anyOk,
+        mode: decision.mode,
         message: anyOk
-          ? '各数据源均无符合筛选的新增行（或已全部存在）'
+          ? '数据源无符合筛选的新增行（或已全部存在）'
           : '数据源请求失败，未导入',
         imported: 0,
         total: 0,
@@ -55,100 +97,56 @@ export async function POST(request: Request) {
         droppedNonRestaurant,
         enrichmentCalls,
         sinceDate,
-        metro,
+        metro: decision.metroLabel,
         sources: sourceResults,
       });
     }
 
-    // 把 pipeline lead 投射到 leads 表列
-    const upsertRows = deduped.map((d) => ({
-      name: d.name,
-      address: d.address,
-      phone: d.phone,
-      cuisine_type: d.cuisine_type,
-      city: d.city,
-      metro_area: d.metro_area,
-      source: d.source,
-      external_id: d.external_id,
-      license_date: d.license_date,
-      first_inspection_date: d.first_inspection_date,
-      license_type: d.license_type,
-      source_raw: d.source_raw,
-      lead_status: d.lead_status,
-      lead_score: d.lead_score,
-      is_restaurant_confidence: d.is_restaurant_confidence,
-      ai_classification: d.ai_classification,
-    }));
-
-    // 先用 (source, external_id) 作为冲突键；没有 external_id 的行交由 Postgres 回落索引
-    // （idx_leads_name_address_city_lower 部分索引）处理，Supabase client 对部分索引支持有限，
-    // 这里采取两段式 upsert：有 external_id 的先上，其余按 (name, address, city) 软去重。
-    const withExt = upsertRows.filter((r) => !!r.external_id);
-    const withoutExt = upsertRows.filter((r) => !r.external_id);
-
     let imported = 0;
-
-    if (withExt.length > 0) {
-      const { data, error } = await supabaseAdmin
-        .from('leads')
-        .upsert(withExt, { onConflict: 'source,external_id', ignoreDuplicates: false })
-        .select('id');
-      if (error) {
-        console.error('Supabase upsert(withExt) error:', error);
-        // Supabase schema 缺列（migration 未跑）/ 约束冲突 → 返回结构化错误让前端提示
-        return NextResponse.json(
-          {
-            success: false,
-            error: `Database error: ${error.message}`,
-            hint: error.message.toLowerCase().includes('column')
-              ? '可能是 Supabase schema migration 未执行。请在 Supabase SQL Editor 运行 supabase/schema.sql 底部的 V1 migration 块。'
-              : undefined,
-            metro,
-            sources: sourceResults,
-          },
-          { status: 500 },
-        );
-      }
-      imported += data?.length ?? 0;
+    let degraded = false;
+    let schemaHint: string | undefined;
+    try {
+      const result = await writePipelineLeads(supabaseAdmin, deduped);
+      imported = result.imported;
+      degraded = result.degraded;
+      schemaHint = result.schemaHint;
+    } catch (err) {
+      console.error('[POST /api/leads/import] write error:', err);
+      return NextResponse.json(
+        {
+          success: false,
+          mode: decision.mode,
+          error: err instanceof Error ? err.message : 'Database write failed',
+          metro: decision.metroLabel,
+          sources: sourceResults,
+        },
+        { status: 500 },
+      );
     }
 
-    if (withoutExt.length > 0) {
-      // 没有 external_id：按行一个个判断，避免误覆盖
-      for (const row of withoutExt) {
-        const { data: exists } = await supabaseAdmin
-          .from('leads')
-          .select('id')
-          .eq('name', row.name)
-          .eq('city', row.city)
-          .ilike('address', row.address ?? '')
-          .maybeSingle();
-        if (!exists) {
-          const { data, error } = await supabaseAdmin.from('leads').insert(row).select('id');
-          if (error) {
-            console.warn('Supabase insert(withoutExt) skipped:', row.name, error.message);
-            continue;
-          }
-          imported += data?.length ?? 0;
-        }
-      }
-    }
-
-    const chineseTagged = leads.filter((l) => CHINESE_TAGS.includes(l.cuisine_type)).length;
+    const chineseTagged = leads.filter((l) =>
+      CHINESE_TAGS.includes(l.cuisine_type),
+    ).length;
 
     return NextResponse.json({
       success: true,
-      message: `成功写入 ${imported} 条新餐饮类 leads（合并拉取 ${deduped.length} 条，AI 丢弃非餐厅 ${droppedNonRestaurant} 条）`,
+      mode: decision.mode,
+      message: `成功写入 ${imported} 条（合并拉取 ${deduped.length} 条${
+        degraded ? '；schema 未迁移已降级' : ''
+      }）`,
       imported,
       total: deduped.length,
       chineseTagged,
       droppedNonRestaurant,
       enrichmentCalls,
       sinceDate,
-      metro,
+      metro: decision.metroLabel,
       sources: sourceResults,
+      degraded,
+      schemaHint,
     });
   } catch (error) {
-    console.error('Import error:', error);
+    console.error('[POST /api/leads/import]', error);
     return NextResponse.json(
       {
         success: false,
@@ -159,11 +157,28 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const listSources = url.searchParams.get('listSources');
+
+  // 列出启用源 id 列表 —— 前端 loop 起手用
+  if (listSources === '1' || listSources === 'true') {
+    const all = enabledSources();
+    return NextResponse.json({
+      sourceIds: all.map((s) => s.id),
+      sources: all.map((s) => ({
+        id: s.id,
+        label: s.label,
+        metro: s.metro,
+        kind: s.kind,
+      })),
+    });
+  }
+
   const metros = enabledMetros();
   return NextResponse.json({
     message:
-      'POST JSON {"metro":"<metro-id>"} 从对应开放数据导入餐饮线索；缺省为 sf_bay。支持的 metro 见 "metros"。',
+      'POST JSON: { "sourceId":"<id>" } 单源执行 | { "metro":"<metro-id>" } 跑 metro 下全部源 | { "metro":"all" } 仅列出源 id 由前端循环。GET ?listSources=1 获取源列表。',
     metros: metros.map((m) => ({
       id: m,
       sources: sourcesForMetro(m).map((s) => ({

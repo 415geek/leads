@@ -16,7 +16,7 @@ import { fetchSocrata, toSourceFetchResult } from './socrata';
 import { buildCuisineLabel, pickText, snapshotSourceRaw } from '@/lib/bay-area-food-import/shared';
 
 const ENDPOINT = 'https://data.austintexas.gov/resource/ecmv-9xxi.json';
-const FETCH_LIMIT = 1000;
+const FETCH_LIMIT = 300;
 
 function stableId(name: string, address: string | null): string {
   const s = `${name.toLowerCase()}|${(address || '').toLowerCase()}`;

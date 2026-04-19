@@ -68,7 +68,7 @@ export const bostonSource: FoodDataSource = {
   async fetchAndNormalize({ sinceDate }) {
     const id = this.id;
     const label = this.label;
-    const sql = `SELECT * FROM "${BOSTON_FOOD_RESOURCE}" WHERE "inspdttm" >= '${sinceDate}' ORDER BY "inspdttm" DESC LIMIT 1000`;
+    const sql = `SELECT * FROM "${BOSTON_FOOD_RESOURCE}" WHERE "inspdttm" >= '${sinceDate}' ORDER BY "inspdttm" DESC LIMIT 300`;
 
     try {
       const response = await fetch(CKAN_BASE, {

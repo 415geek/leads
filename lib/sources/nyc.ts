@@ -19,7 +19,7 @@ import { fetchSocrata, toSourceFetchResult } from './socrata';
 import { buildCuisineLabel, pickText, snapshotSourceRaw } from '@/lib/bay-area-food-import/shared';
 
 const ENDPOINT = 'https://data.cityofnewyork.us/resource/43nn-pn8j.json';
-const FETCH_LIMIT = 1000;
+const FETCH_LIMIT = 300;
 
 const BORO_TO_CITY: Record<string, string> = {
   MANHATTAN: 'Manhattan',

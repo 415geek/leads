@@ -17,7 +17,7 @@ import { fetchSocrata, toSourceFetchResult } from './socrata';
 import { buildCuisineLabel, pickText, snapshotSourceRaw } from '@/lib/bay-area-food-import/shared';
 
 const ENDPOINT = 'https://data.lacounty.gov/resource/cqzw-bncn.json';
-const FETCH_LIMIT = 1000;
+const FETCH_LIMIT = 300;
 
 function normalizeRow(row: Record<string, unknown>): NormalizedDraft | null {
   const name = pickText(row.facility_name) ?? pickText(row.name);

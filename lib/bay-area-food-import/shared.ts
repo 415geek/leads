@@ -3,9 +3,14 @@ import { buildBayAreaCityUpperInListSoql } from './bay-area-cities-data-sf';
 
 /** 与 SF 导入一致：近 N 天 + 单次上限 */
 export const LOOKBACK_DAYS = 30;
-export const FETCH_LIMIT = 500;
-/** DataSF g8m3 覆盖全湾区白名单城市后，近期餐饮行数可能更多 */
-export const SF_G8M3_FETCH_LIMIT = 1200;
+/**
+ * 单次 API 上限瘦身到 300：
+ *   - 近 30 天真实新登记/检查一般在几十到两百条
+ *   - 上限太大会拖慢 Vercel 函数导致 504（根因见 plan：修复导入超时）
+ *   - 真要历史回填，走 cron + 分页；交互式按钮不追求一次抓全
+ */
+export const FETCH_LIMIT = 300;
+export const SF_G8M3_FETCH_LIMIT = 300;
 
 export function pickText(v: unknown): string | null {
   if (v == null) return null;

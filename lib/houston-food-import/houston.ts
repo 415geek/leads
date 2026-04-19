@@ -14,7 +14,7 @@ const HOUSTON_CKN_BASE = 'https://data.houstontx.gov/api/3/action/datastore_sear
 export const HOUSTON_LAST_INSPECTION_RESOURCE =
   '1587d382-4eb4-441f-a77a-d2eef9d7b208';
 
-const HOUSTON_IMPORT_LIMIT = 1200;
+const HOUSTON_IMPORT_LIMIT = 300;
 
 function foodFacilitySqlWhere(): string {
   const f = 'FACILITY TYPE';

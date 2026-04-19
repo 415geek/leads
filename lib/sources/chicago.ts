@@ -16,7 +16,7 @@ import { fetchSocrata, toSourceFetchResult } from './socrata';
 import { buildCuisineLabel, pickText, snapshotSourceRaw } from '@/lib/bay-area-food-import/shared';
 
 const ENDPOINT = 'https://data.cityofchicago.org/resource/4ijn-s7e5.json';
-const FETCH_LIMIT = 1000;
+const FETCH_LIMIT = 300;
 
 function normalizeRow(row: Record<string, unknown>): NormalizedDraft | null {
   // Socrata 某些字段 key 含空格/特殊字符；使用多重 fallback

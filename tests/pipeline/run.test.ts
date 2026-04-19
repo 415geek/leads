@@ -137,6 +137,49 @@ describe('runPipeline', () => {
     expect(huSpy).not.toHaveBeenCalled();
   });
 
+  it('singleSourceId runs exactly one source (import-timeout fix)', async () => {
+    sfSpy.mockResolvedValue({
+      result: { id: 'sf_gov', label: 'sf', ok: true, fetched: 0 },
+      drafts: [],
+    });
+    huSpy.mockResolvedValue({
+      result: { id: 'houston_hdhhs', label: 'hou', ok: true, fetched: 1 },
+      drafts: [houstonDraft()],
+    });
+    brkSpy.mockResolvedValue({
+      result: { id: 'berkeley_open_data', label: 'bk', ok: true, fetched: 0 },
+      drafts: [],
+    });
+
+    const res = await runPipeline({ singleSourceId: 'houston_hdhhs' });
+
+    // Only houston should have been called
+    expect(huSpy).toHaveBeenCalledTimes(1);
+    expect(sfSpy).not.toHaveBeenCalled();
+    expect(brkSpy).not.toHaveBeenCalled();
+    expect(res.leads).toHaveLength(1);
+    expect(res.leads[0].source).toBe('houston_hdhhs');
+  });
+
+  it('skipClassify=true bypasses classifier (default for interactive import)', async () => {
+    sfSpy.mockResolvedValue({
+      result: { id: 'sf_gov', label: 'sf', ok: true, fetched: 1 },
+      drafts: [sfDraft()],
+    });
+    brkSpy.mockResolvedValue({
+      result: { id: 'berkeley_open_data', label: 'bk', ok: true, fetched: 0 },
+      drafts: [],
+    });
+
+    const res = await runPipeline({ singleSourceId: 'sf_gov', skipClassify: true });
+
+    expect(res.leads).toHaveLength(1);
+    // confidence is null when classify is skipped
+    expect(res.leads[0].is_restaurant_confidence).toBeNull();
+    // dropped stays 0 because we don't classify
+    expect(res.droppedNonRestaurant).toBe(0);
+  });
+
   it('isolates failure: one source throws, other source still yields leads', async () => {
     sfSpy.mockRejectedValue(new Error('SF exploded'));
     brkSpy.mockResolvedValue({
