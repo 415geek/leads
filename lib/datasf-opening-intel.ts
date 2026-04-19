@@ -95,7 +95,7 @@ function tokenJaccard(a: string, b: string): number {
   return inter / (ta.size + tb.size - inter);
 }
 
-function parseDay(s: string | null | undefined): Date | null {
+function parseDay(s: unknown): Date | null {
   const t = pickText(s);
   if (!t) return null;
   const day = t.split('T')[0];
@@ -108,10 +108,11 @@ function daysDiff(a: Date, b: Date): number {
 }
 
 /** DataSF：Administratively Closed 存成包含该短语的文本；active 一般为 null */
-export function isDatasfActiveLocationRow(row: Record<string, unknown>): boolean {
-  if (pickText(row.location_end_date)) return false;
-  if (pickText(row.dba_end_date)) return false;
-  const ac = pickText(row.administratively_closed);
+export function isDatasfActiveLocationRow(row: object): boolean {
+  const r = row as Record<string, unknown>;
+  if (pickText(r.location_end_date)) return false;
+  if (pickText(r.dba_end_date)) return false;
+  const ac = pickText(r.administratively_closed);
   if (ac && ac.toUpperCase().includes('ADMINISTRATIVELY CLOSED')) return false;
   return true;
 }
@@ -169,7 +170,7 @@ export interface NewOpeningIntelOptions {
  * 仅新开店评分 + 实体/门店新度标记（不含转手）
  */
 export function computeDatasfNewOpeningIntel(
-  row: Record<string, unknown>,
+  row: object,
   referenceDate: Date,
   opts: NewOpeningIntelOptions = {},
 ): Pick<
@@ -181,13 +182,14 @@ export function computeDatasfNewOpeningIntel(
   | 'is_new_business_entity'
   | 'normalized_address_key'
 > {
+  const r = row as Record<string, unknown>;
   const windowDays = opts.newOpeningWindowDays ?? 90;
   const reasons: OpeningReasonCode[] = [];
   let score = 0;
 
-  const locStart = parseDay(row.location_start_date as unknown);
-  const dbaStart = parseDay(row.dba_start_date as unknown);
-  const addrKey = normalizedBaseAddressKey(pickText(row.full_business_address));
+  const locStart = parseDay(r.location_start_date);
+  const dbaStart = parseDay(r.dba_start_date);
+  const addrKey = normalizedBaseAddressKey(pickText(r.full_business_address));
 
   if (!locStart) {
     return {
@@ -212,22 +214,22 @@ export function computeDatasfNewOpeningIntel(
     reasons.push('RECENT_LOCATION_START');
   }
 
-  if (isDatasfActiveLocationRow(row)) {
+  if (isDatasfActiveLocationRow(r)) {
     score += 20;
     reasons.push('ACTIVE_RECORD');
   }
 
-  if (isFoodServiceNaics(row)) {
+  if (isFoodServiceNaics(r)) {
     score += 15;
     reasons.push('FOOD_SERVICE_NAICS');
   }
 
-  if (isRestaurantLic(row)) {
+  if (isRestaurantLic(r)) {
     score += 10;
     reasons.push('RESTAURANT_LICENSE_MATCH');
   }
 
-  const dba = pickText(row.dba_name) ?? '';
+  const dba = pickText(r.dba_name) ?? '';
   const legalish = /\b(LLC|INC|CORP|L\.P\.|LP)\b/i.test(dba);
   if (dba.length >= 4 && !legalish) {
     score += 5;
@@ -271,17 +273,18 @@ export interface TransferMatchOptions {
  * 在同一基址上寻找「旧店结束 → 新店开始」时间序列 + 主体变化（文档 MVP）
  */
 export function matchDatasfTransfer(
-  activeRow: Record<string, unknown>,
+  activeRow: object,
   candidates: readonly PriorClosedRecord[],
   referenceDate: Date,
   opts: TransferMatchOptions = {},
 ): Pick<DatasfOpeningSignals, 'transfer_score' | 'transfer_label' | 'reason_codes'> & {
   matched_prior: boolean;
 } {
+  const activeRowR = activeRow as Record<string, unknown>;
   const window = opts.transferWindowDays ?? 120;
   const sameBrand = opts.sameBrandSimilarity ?? 0.8;
 
-  const locStart = parseDay(activeRow.location_start_date as unknown);
+  const locStart = parseDay(activeRowR.location_start_date);
   if (!locStart || candidates.length === 0) {
     return {
       transfer_score: 0,
@@ -291,10 +294,10 @@ export function matchDatasfTransfer(
     };
   }
 
-  const activeOwner = normalizeOrgName(pickText(activeRow.ownership_name));
-  const activeCert = pickText(activeRow.certificate_number);
-  const activeDbaN = normalizeOrgName(pickText(activeRow.dba_name));
-  const activeKey = normalizedBaseAddressKey(pickText(activeRow.full_business_address));
+  const activeOwner = normalizeOrgName(pickText(activeRowR.ownership_name));
+  const activeCert = pickText(activeRowR.certificate_number);
+  const activeDbaN = normalizeOrgName(pickText(activeRowR.dba_name));
+  const activeKey = normalizedBaseAddressKey(pickText(activeRowR.full_business_address));
 
   let best:
     | {
@@ -355,15 +358,15 @@ export function matchDatasfTransfer(
     reasons.push('DBA_NAME_CHANGED');
   }
 
-  if (isFoodServiceNaics(activeRow) && isFoodServiceNaics(oldRow)) {
+  if (isFoodServiceNaics(activeRowR) && isFoodServiceNaics(oldRow)) {
     tscore += 10;
     reasons.push('SAME_INDUSTRY_CONTINUES_AT_ADDRESS');
   }
-  if (isRestaurantLic(activeRow) && isRestaurantLic(oldRow)) {
+  if (isRestaurantLic(activeRowR) && isRestaurantLic(oldRow)) {
     tscore += 5;
   }
 
-  if (normalizeAddressForDatasf(pickText(activeRow.full_business_address)) === normalizeAddressForDatasf(pickText(oldRow.full_business_address))) {
+  if (normalizeAddressForDatasf(pickText(activeRowR.full_business_address)) === normalizeAddressForDatasf(pickText(oldRow.full_business_address))) {
     tscore += 10;
     reasons.push('UNIT_MATCH_CONFIRMED');
   }
@@ -394,7 +397,7 @@ export function indexClosedRecordsByBaseAddress(
 ): Map<string, PriorClosedRecord[]> {
   const m = new Map<string, PriorClosedRecord[]>();
   for (const row of rows) {
-    const end = parseDay(row.location_end_date as unknown);
+    const end = parseDay(row.location_end_date);
     if (!end) continue;
     const key = normalizedBaseAddressKey(pickText(row.full_business_address));
     if (!key) continue;
