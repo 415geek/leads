@@ -59,11 +59,14 @@ export default function LeadsPage() {
   const [minConfidence, setMinConfidence] = useState<string>('all');
   const regionHydrated = useRef(false);
 
-  const importRegion: LeadRegionId =
-    region === 'all' ? (REGION_OPTIONS[0]?.id ?? 'sf_bay') : region;
+  // region='all' → 按 metro='all' 跑全部启用源；否则按单城
+  const importPayload: { metro: LeadRegionId | 'all' } =
+    region === 'all' ? { metro: 'all' } : { metro: region };
 
-  const importRegionLabel =
-    METRO_CONFIGS.find((m) => m.id === importRegion)?.shortLabel ?? importRegion;
+  const importLabel =
+    region === 'all'
+      ? '导入全部启用城市'
+      : `从${METRO_CONFIGS.find((m) => m.id === region)?.shortLabel ?? region}开放数据导入`;
 
   const handleImport = async () => {
     setImporting(true);
@@ -71,9 +74,19 @@ export default function LeadsPage() {
       const response = await fetch('/api/leads/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ metro: importRegion }),
+        body: JSON.stringify(importPayload),
       });
       const result = await response.json();
+
+      // 即使失败也展示每源明细（方便诊断）
+      const srcList: Array<{ id?: string; ok?: boolean; fetched?: number; error?: string }> =
+        Array.isArray(result.sources) ? result.sources : [];
+      const okParts = srcList
+        .filter((s) => s.ok)
+        .map((s) => `${s.id}:${s.fetched ?? 0}`);
+      const failParts = srcList
+        .filter((s) => !s.ok)
+        .map((s) => `${s.id}:${s.error ?? 'fail'}`);
 
       if (result.success) {
         const extra =
@@ -84,23 +97,19 @@ export default function LeadsPage() {
           typeof result.droppedNonRestaurant === 'number' && result.droppedNonRestaurant > 0
             ? `，AI 丢弃非餐厅 ${result.droppedNonRestaurant} 条`
             : '';
-        const src =
-          Array.isArray(result.sources) && result.sources.length > 0
-            ? ` [${result.sources
-                .filter((s: { ok?: boolean }) => s.ok)
-                .map((s: { id?: string }) => s.id)
-                .join(', ')}]`
-            : '';
-        const metroLabel =
-          METRO_CONFIGS.find((m) => m.id === result.metro)?.shortLabel ?? importRegionLabel;
+        const srcOk = okParts.length ? ` ✓[${okParts.join(', ')}]` : '';
+        const srcFail = failParts.length ? ` ✗[${failParts.join(', ')}]` : '';
         toast.success(
-          `【${metroLabel}】新增 ${result.imported} 条餐饮类 leads（本次合并拉取 ${
+          `新增 ${result.imported} 条（合并拉取 ${
             result.total ?? result.imported
-          } 条${extra}${dropped}）${src}`,
+          } 条${extra}${dropped}）${srcOk}${srcFail}`,
+          { duration: 8000 },
         );
         fetchLeads();
       } else {
-        toast.error(result.error || '导入失败，请稍后重试');
+        const hint = result.hint ? `\n提示：${result.hint}` : '';
+        const srcFail = failParts.length ? `\n失败源：${failParts.join(', ')}` : '';
+        toast.error(`${result.error || '导入失败'}${hint}${srcFail}`, { duration: 12000 });
       }
     } catch {
       toast.error('网络错误，请稍后重试');
@@ -190,7 +199,7 @@ export default function LeadsPage() {
           ) : (
             <>
               <span className="mr-2">📥</span>
-              {`从${importRegionLabel}开放数据导入餐饮登记`}
+              {importLabel}
             </>
           )}
         </Button>

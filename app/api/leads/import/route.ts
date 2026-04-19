@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { enabledMetros, sourcesForMetro } from '@/lib/sources/registry';
+import { enabledMetros, enabledSources, sourcesForMetro } from '@/lib/sources/registry';
 import { runPipeline } from '@/lib/pipeline/run';
 import { dedupePipelineLeads } from '@/lib/pipeline/dedupe';
 import { parseMetroInput, CHINESE_TAGS } from '@/lib/pipeline/api-helpers';
+
+// 跨城导入 + Socrata 并发可能较慢；放大 maxDuration
+export const maxDuration = 120;
 
 export async function POST(request: Request) {
   try {
@@ -14,8 +17,24 @@ export async function POST(request: Request) {
       body = {};
     }
 
-    const metro = parseMetroInput(body, enabledMetros()) ?? 'sf_bay';
-    const sourceIds = sourcesForMetro(metro).map((s) => s.id);
+    // 支持 metro='all'：跑 registry 里所有 enabled 源
+    const rawMetro =
+      body && typeof body === 'object'
+        ? (body as { metro?: string; region?: string }).metro ??
+          (body as { metro?: string; region?: string }).region
+        : undefined;
+
+    let metro: string;
+    let sourceIds: string[];
+
+    if (rawMetro === 'all') {
+      metro = 'all';
+      sourceIds = enabledSources().map((s) => s.id);
+    } else {
+      const parsed = parseMetroInput(body, enabledMetros()) ?? 'sf_bay';
+      metro = parsed;
+      sourceIds = sourcesForMetro(parsed).map((s) => s.id);
+    }
 
     const { sinceDate, sourceResults, leads, droppedNonRestaurant, enrichmentCalls } =
       await runPipeline({ sourceIds });
@@ -76,7 +95,19 @@ export async function POST(request: Request) {
         .select('id');
       if (error) {
         console.error('Supabase upsert(withExt) error:', error);
-        throw new Error(`Database error: ${error.message}`);
+        // Supabase schema 缺列（migration 未跑）/ 约束冲突 → 返回结构化错误让前端提示
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Database error: ${error.message}`,
+            hint: error.message.toLowerCase().includes('column')
+              ? '可能是 Supabase schema migration 未执行。请在 Supabase SQL Editor 运行 supabase/schema.sql 底部的 V1 migration 块。'
+              : undefined,
+            metro,
+            sources: sourceResults,
+          },
+          { status: 500 },
+        );
       }
       imported += data?.length ?? 0;
     }
