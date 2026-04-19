@@ -1,62 +1,62 @@
-/** 销售区域 / 开放数据门户（与导入 source、筛选联动） */
+/**
+ * 区域/城市配置 —— 现在从 lib/sources/registry + metro-config 动态生成
+ *
+ * 向后兼容：
+ *   - 保留 LeadRegionId 类型，但底层实际上就是 MetroArea
+ *   - 保留 REGION_OPTIONS / cityOptionsForRegion 导出供现有 UI / API 调用
+ *   - 新代码请直接用 lib/sources/registry + lib/sources/metro-config
+ */
 
-export type LeadRegionId = 'bay_area' | 'houston';
+import { METRO_CONFIGS } from '@/lib/sources/metro-config';
+import { enabledMetros, sourceIdsForMetro } from '@/lib/sources/registry';
+import type { MetroArea } from '@/lib/sources/types';
 
-/** 列表筛选：含「全部」以便跨区查看 */
+/** 向后兼容别名 */
+export type LeadRegionId = MetroArea;
 export type LeadRegionFilterId = LeadRegionId | 'all';
 
 export const LEADS_REGION_STORAGE_KEY = 'restaurant-leads-region';
 
+/** 用于 UI 下拉：仅展示当前 registry 中 enabled 的 metro */
 export const REGION_OPTIONS: {
   id: LeadRegionId;
   label: string;
   shortLabel: string;
   openDataUrl: string;
   importHint: string;
-}[] = [
-  {
-    id: 'bay_area',
-    label: '旧金山湾区（DataSF / Berkeley）',
-    shortLabel: '湾区',
-    openDataUrl: 'https://data.sfgov.org/',
-    importHint: '自动导入湾区餐饮登记（近 30 天等）',
-  },
-  {
-    id: 'houston',
-    label: '休斯顿（City of Houston Open Data）',
-    shortLabel: '休斯顿',
-    openDataUrl: 'https://data.houstontx.gov/dataset?q=business&sort=score+desc%2C+metadata_modified+desc',
-    importHint:
-      '自 HDHHS 食品服务设施检查登记拉取餐饮相关业态（门户为 CKAN API；数据集为历史快照，日期待在详情中核对）',
-  },
-];
+}[] = (() => {
+  const active = new Set(enabledMetros());
+  return METRO_CONFIGS.filter((m) => active.has(m.id)).map((m) => ({
+    id: m.id,
+    label: m.label,
+    shortLabel: m.shortLabel,
+    openDataUrl: m.openDataUrl,
+    importHint: `自动从 ${m.label} 相关开放数据导入餐饮登记/检查`,
+  }));
+})();
 
-export const HOUSTON_CITY_LABEL = 'Houston';
-
+/** 兼容旧 UI：Houston 列表只显示 Houston；"全部地区"汇总所有启用 metro 的城市 */
 export function cityOptionsForRegion(region: LeadRegionFilterId) {
-  if (region === 'houston') {
-    return [
-      { value: 'all', label: '休斯顿全市' },
-      { value: HOUSTON_CITY_LABEL, label: HOUSTON_CITY_LABEL },
-    ];
-  }
   if (region === 'all') {
+    const active = new Set(enabledMetros());
+    const cities = Array.from(
+      new Set(METRO_CONFIGS.filter((m) => active.has(m.id)).flatMap((m) => m.cities)),
+    );
     return [
       { value: 'all', label: '全部城市' },
-      { value: 'San Francisco', label: 'San Francisco' },
-      { value: 'Oakland', label: 'Oakland' },
-      { value: 'San Jose', label: 'San Jose' },
-      { value: 'Fremont', label: 'Fremont' },
-      { value: 'Berkeley', label: 'Berkeley' },
-      { value: HOUSTON_CITY_LABEL, label: HOUSTON_CITY_LABEL },
+      ...cities.map((c) => ({ value: c, label: c })),
     ];
   }
+  const cfg = METRO_CONFIGS.find((m) => m.id === region);
+  if (!cfg) return [{ value: 'all', label: '全部城市' }];
   return [
-    { value: 'all', label: '全部城市' },
-    { value: 'San Francisco', label: 'San Francisco' },
-    { value: 'Oakland', label: 'Oakland' },
-    { value: 'San Jose', label: 'San Jose' },
-    { value: 'Fremont', label: 'Fremont' },
-    { value: 'Berkeley', label: 'Berkeley' },
+    { value: 'all', label: `${cfg.shortLabel}全部城市` },
+    ...cfg.cities.map((c) => ({ value: c, label: c })),
   ];
+}
+
+/** 给 API 过滤用：某 metro 下对应的 source id 列表 */
+export function sourceIdsForRegion(region: LeadRegionFilterId): string[] | null {
+  if (region === 'all') return null;
+  return sourceIdsForMetro(region);
 }

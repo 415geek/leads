@@ -32,6 +32,7 @@ import {
   type LeadRegionFilterId,
   type LeadRegionId,
 } from '@/lib/region-config';
+import { METRO_CONFIGS } from '@/lib/sources/metro-config';
 
 const STATUS_OPTIONS: { value: LeadStatus | 'all'; label: string }[] = [
   { value: 'all', label: '全部状态' },
@@ -51,11 +52,18 @@ export default function LeadsPage() {
   const [city, setCity] = useState<string>('all');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [region, setRegion] = useState<LeadRegionFilterId>('bay_area');
+  const [region, setRegion] = useState<LeadRegionFilterId>(
+    (REGION_OPTIONS[0]?.id ?? 'sf_bay') as LeadRegionFilterId,
+  );
+  const [chineseOnly, setChineseOnly] = useState(false);
+  const [minConfidence, setMinConfidence] = useState<string>('all');
   const regionHydrated = useRef(false);
 
   const importRegion: LeadRegionId =
-    region === 'all' ? 'bay_area' : region;
+    region === 'all' ? (REGION_OPTIONS[0]?.id ?? 'sf_bay') : region;
+
+  const importRegionLabel =
+    METRO_CONFIGS.find((m) => m.id === importRegion)?.shortLabel ?? importRegion;
 
   const handleImport = async () => {
     setImporting(true);
@@ -63,14 +71,18 @@ export default function LeadsPage() {
       const response = await fetch('/api/leads/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ region: importRegion }),
+        body: JSON.stringify({ metro: importRegion }),
       });
       const result = await response.json();
-      
+
       if (result.success) {
         const extra =
           typeof result.chineseTagged === 'number' && result.chineseTagged > 0
             ? `，含中餐标签 ${result.chineseTagged} 条`
+            : '';
+        const dropped =
+          typeof result.droppedNonRestaurant === 'number' && result.droppedNonRestaurant > 0
+            ? `，AI 丢弃非餐厅 ${result.droppedNonRestaurant} 条`
             : '';
         const src =
           Array.isArray(result.sources) && result.sources.length > 0
@@ -79,12 +91,12 @@ export default function LeadsPage() {
                 .map((s: { id?: string }) => s.id)
                 .join(', ')}]`
             : '';
-        const r =
-          result.region === 'houston'
-            ? '休斯顿'
-            : '湾区';
+        const metroLabel =
+          METRO_CONFIGS.find((m) => m.id === result.metro)?.shortLabel ?? importRegionLabel;
         toast.success(
-          `【${r}】新增 ${result.imported} 条餐饮类 leads（本次合并拉取 ${result.total ?? result.imported} 条${extra}）${src}`,
+          `【${metroLabel}】新增 ${result.imported} 条餐饮类 leads（本次合并拉取 ${
+            result.total ?? result.imported
+          } 条${extra}${dropped}）${src}`,
         );
         fetchLeads();
       } else {
@@ -111,10 +123,12 @@ export default function LeadsPage() {
       if (status !== 'all') params.append('status', status);
       if (city !== 'all') params.append('city', city);
       if (region !== 'all') params.append('region', region);
-      
+      if (chineseOnly) params.append('chinese_only', '1');
+      if (minConfidence !== 'all') params.append('min_confidence', minConfidence);
+
       const response = await fetch(`/api/leads?${params}`);
       const result = await response.json();
-      
+
       setLeads(result.data || []);
       setTotalPages(result.pagination?.totalPages || 1);
     } catch (error) {
@@ -122,13 +136,15 @@ export default function LeadsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, status, city, region]);
+  }, [page, search, status, city, region, chineseOnly, minConfidence]);
 
   useEffect(() => {
     try {
       const s = localStorage.getItem(LEADS_REGION_STORAGE_KEY);
-      if (s === 'houston' || s === 'bay_area' || s === 'all') {
-        setRegion(s);
+      // 兼容老的 'bay_area' storage 值（已改名为 'sf_bay'）
+      const migrated = s === 'bay_area' ? 'sf_bay' : s;
+      if (migrated === 'all' || REGION_OPTIONS.some((opt) => opt.id === migrated)) {
+        setRegion(migrated as LeadRegionFilterId);
       }
     } catch {
       /* ignore */
@@ -151,7 +167,7 @@ export default function LeadsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, status, city, region]);
+  }, [search, status, city, region, chineseOnly, minConfidence]);
 
   useEffect(() => {
     setCity('all');
@@ -174,9 +190,7 @@ export default function LeadsPage() {
           ) : (
             <>
               <span className="mr-2">📥</span>
-              {importRegion === 'houston'
-                ? '从休斯顿开放数据导入餐饮登记'
-                : '从湾区开放数据导入餐饮登记'}
+              {`从${importRegionLabel}开放数据导入餐饮登记`}
             </>
           )}
         </Button>
@@ -189,16 +203,21 @@ export default function LeadsPage() {
         <CardContent>
           <div className="flex flex-col gap-3">
             <p className="text-sm text-muted-foreground">
-              选择地区后，列表与导入会对齐对应政府开放数据门户（休斯顿为{' '}
-              <a
-                href="https://data.houstontx.gov/dataset?q=business&sort=score+desc%2C+metadata_modified+desc"
-                className="text-[#1e3a5f] underline underline-offset-2"
-                target="_blank"
-                rel="noreferrer"
-              >
-                data.houstontx.gov
-              </a>
-              ，经 CKAN API 拉取 HDHHS 食品服务设施登记）。
+              选择地区后，列表与导入会对齐对应政府开放数据门户。目前启用的都会区：
+              {REGION_OPTIONS.map((opt, i) => (
+                <span key={opt.id}>
+                  {i > 0 && '、'}
+                  <a
+                    href={opt.openDataUrl}
+                    className="text-[#1e3a5f] underline underline-offset-2"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {opt.shortLabel}
+                  </a>
+                </span>
+              ))}
+              。AI 分类层仅保留 &ldquo;是餐厅&rdquo; 的条目；Google Places enrichment 会在 Phase 2 启用。
             </p>
             <div className="flex flex-wrap gap-4">
             <Select
@@ -250,6 +269,28 @@ export default function LeadsPage() {
                 ))}
               </SelectContent>
             </Select>
+
+            <Select value={minConfidence} onValueChange={(v) => v && setMinConfidence(v)}>
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="AI 置信度" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">AI 置信度：全部</SelectItem>
+                <SelectItem value="0.6">≥ 0.6（推荐）</SelectItem>
+                <SelectItem value="0.8">≥ 0.8（严格）</SelectItem>
+                <SelectItem value="0.9">≥ 0.9（极严格）</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={chineseOnly}
+                onChange={(e) => setChineseOnly(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              只看中餐
+            </label>
             </div>
           </div>
         </CardContent>

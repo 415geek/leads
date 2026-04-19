@@ -40,6 +40,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Vercel Cron：凭 Authorization: Bearer <CRON_SECRET> 校验
+  if (pathname.startsWith('/api/cron/')) {
+    return NextResponse.next();
+  }
+
   if (pathname.startsWith('/api/')) {
     if (!isAuthed) {
       return NextResponse.json({ error: '未登录' }, { status: 401 });

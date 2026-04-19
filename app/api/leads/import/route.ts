@@ -1,23 +1,9 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import {
-  LOOKBACK_DAYS,
-  countChineseTagged,
-} from '@/lib/bay-area-food-import';
-import type { LeadRegionId } from '@/lib/region-config';
-import { runFoodImportForRegion } from '@/lib/regional-food-import';
-
-function parseRegion(body: unknown): LeadRegionId {
-  if (
-    body &&
-    typeof body === 'object' &&
-    'region' in body &&
-    (body as { region?: string }).region === 'houston'
-  ) {
-    return 'houston';
-  }
-  return 'bay_area';
-}
+import { enabledMetros, sourcesForMetro } from '@/lib/sources/registry';
+import { runPipeline } from '@/lib/pipeline/run';
+import { dedupePipelineLeads } from '@/lib/pipeline/dedupe';
+import { parseMetroInput, CHINESE_TAGS } from '@/lib/pipeline/api-helpers';
 
 export async function POST(request: Request) {
   try {
@@ -27,10 +13,17 @@ export async function POST(request: Request) {
     } catch {
       body = {};
     }
-    const region = parseRegion(body);
-    const { sinceDate, sourceResults, leads } = await runFoodImportForRegion(region);
 
-    if (leads.length === 0) {
+    const metro = parseMetroInput(body, enabledMetros()) ?? 'sf_bay';
+    const sourceIds = sourcesForMetro(metro).map((s) => s.id);
+
+    const { sinceDate, sourceResults, leads, droppedNonRestaurant, enrichmentCalls } =
+      await runPipeline({ sourceIds });
+
+    // pipeline 层已 normalize + classify + enrich + score，这里仅做 (source, external_id) 内存去重
+    const deduped: typeof leads = dedupePipelineLeads(leads);
+
+    if (deduped.length === 0) {
       const anyOk = sourceResults.some((s) => s.ok);
       return NextResponse.json({
         success: anyOk,
@@ -40,35 +33,87 @@ export async function POST(request: Request) {
         imported: 0,
         total: 0,
         chineseTagged: 0,
+        droppedNonRestaurant,
+        enrichmentCalls,
         sinceDate,
-        region,
+        metro,
         sources: sourceResults,
       });
     }
 
-    const { data, error } = await supabaseAdmin
-      .from('leads')
-      .upsert(leads, {
-        onConflict: 'name,address',
-        ignoreDuplicates: true,
-      })
-      .select();
+    // 把 pipeline lead 投射到 leads 表列
+    const upsertRows = deduped.map((d) => ({
+      name: d.name,
+      address: d.address,
+      phone: d.phone,
+      cuisine_type: d.cuisine_type,
+      city: d.city,
+      metro_area: d.metro_area,
+      source: d.source,
+      external_id: d.external_id,
+      license_date: d.license_date,
+      first_inspection_date: d.first_inspection_date,
+      license_type: d.license_type,
+      source_raw: d.source_raw,
+      lead_status: d.lead_status,
+      lead_score: d.lead_score,
+      is_restaurant_confidence: d.is_restaurant_confidence,
+      ai_classification: d.ai_classification,
+    }));
 
-    if (error) {
-      console.error('Supabase upsert error:', error);
-      throw new Error(`Database error: ${error.message}`);
+    // 先用 (source, external_id) 作为冲突键；没有 external_id 的行交由 Postgres 回落索引
+    // （idx_leads_name_address_city_lower 部分索引）处理，Supabase client 对部分索引支持有限，
+    // 这里采取两段式 upsert：有 external_id 的先上，其余按 (name, address, city) 软去重。
+    const withExt = upsertRows.filter((r) => !!r.external_id);
+    const withoutExt = upsertRows.filter((r) => !r.external_id);
+
+    let imported = 0;
+
+    if (withExt.length > 0) {
+      const { data, error } = await supabaseAdmin
+        .from('leads')
+        .upsert(withExt, { onConflict: 'source,external_id', ignoreDuplicates: false })
+        .select('id');
+      if (error) {
+        console.error('Supabase upsert(withExt) error:', error);
+        throw new Error(`Database error: ${error.message}`);
+      }
+      imported += data?.length ?? 0;
     }
 
-    const chineseTagged = countChineseTagged(leads);
+    if (withoutExt.length > 0) {
+      // 没有 external_id：按行一个个判断，避免误覆盖
+      for (const row of withoutExt) {
+        const { data: exists } = await supabaseAdmin
+          .from('leads')
+          .select('id')
+          .eq('name', row.name)
+          .eq('city', row.city)
+          .ilike('address', row.address ?? '')
+          .maybeSingle();
+        if (!exists) {
+          const { data, error } = await supabaseAdmin.from('leads').insert(row).select('id');
+          if (error) {
+            console.warn('Supabase insert(withoutExt) skipped:', row.name, error.message);
+            continue;
+          }
+          imported += data?.length ?? 0;
+        }
+      }
+    }
+
+    const chineseTagged = leads.filter((l) => CHINESE_TAGS.includes(l.cuisine_type)).length;
 
     return NextResponse.json({
       success: true,
-      message: `成功写入 ${data?.length ?? 0} 条新餐饮类 leads（合并拉取 ${leads.length} 条）`,
-      imported: data?.length ?? 0,
-      total: leads.length,
+      message: `成功写入 ${imported} 条新餐饮类 leads（合并拉取 ${deduped.length} 条，AI 丢弃非餐厅 ${droppedNonRestaurant} 条）`,
+      imported,
+      total: deduped.length,
       chineseTagged,
+      droppedNonRestaurant,
+      enrichmentCalls,
       sinceDate,
-      region,
+      metro,
       sources: sourceResults,
     });
   } catch (error) {
@@ -84,43 +129,19 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
+  const metros = enabledMetros();
   return NextResponse.json({
     message:
-      'POST JSON {"region":"bay_area"|"houston"} 从对应开放数据导入餐饮线索；缺省为 bay_area',
-    lookbackDaysSf: LOOKBACK_DAYS,
-    regions: {
-      bay_area: {
-        portal: 'https://data.sfgov.org/',
-        sources: [
-          {
-            id: 'sf_gov',
-            city: 'Bay Area（DataSF，实地城市）',
-            kind: 'new_business_location',
-            dataset: 'https://data.sfgov.org/resource/g8m3-pdis.json',
-            note: `近 ${LOOKBACK_DAYS} 天 location_start_date；state=CA 且 city 为湾区白名单；餐饮 NAICS/执照筛选`,
-          },
-          {
-            id: 'berkeley_open_data',
-            city: 'Berkeley',
-            kind: 'active_license_snapshot',
-            dataset: 'https://data.cityofberkeley.info/resource/rwnf-bu3w.json',
-            note: '当前有效餐饮相关执照快照',
-          },
-        ],
-      },
-      houston: {
-        portal: 'https://data.houstontx.gov/',
-        sources: [
-          {
-            id: 'houston_hdhhs',
-            kind: 'ckan_datastore_sql',
-            dataset:
-              'City of Houston HDHHS — Last Facility Inspection（餐饮相关 FACILITY TYPE）',
-            api: 'https://data.houstontx.gov/api/3/action/datastore_search_sql',
-            note: '门户检索见 https://data.houstontx.gov/dataset?q=business — 本导入使用健康部门食品设施检查登记（历史快照，日期待核对）',
-          },
-        ],
-      },
-    },
+      'POST JSON {"metro":"<metro-id>"} 从对应开放数据导入餐饮线索；缺省为 sf_bay。支持的 metro 见 "metros"。',
+    metros: metros.map((m) => ({
+      id: m,
+      sources: sourcesForMetro(m).map((s) => ({
+        id: s.id,
+        label: s.label,
+        kind: s.kind,
+        portal: s.portalUrl,
+        enabled: s.enabled,
+      })),
+    })),
   });
 }

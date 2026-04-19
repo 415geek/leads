@@ -1,0 +1,258 @@
+[
+  {
+    "name": "Golden Dragon Dim Sum",
+    "expected_is_restaurant": true,
+    "reason": "Clearly a dim sum restaurant"
+  },
+  {
+    "name": "Sichuan Tasty",
+    "expected_is_restaurant": true,
+    "reason": "Sichuan restaurant chain"
+  },
+  {
+    "name": "Hai Di Lao Hot Pot",
+    "expected_is_restaurant": true,
+    "reason": "Hot pot restaurant"
+  },
+  {
+    "name": "Boba Guys",
+    "expected_is_restaurant": true,
+    "reason": "Bubble tea cafe"
+  },
+  {
+    "name": "Blue Bottle Coffee",
+    "expected_is_restaurant": true,
+    "reason": "Coffee shop"
+  },
+  {
+    "name": "Mitchell's Ice Cream",
+    "expected_is_restaurant": true,
+    "reason": "Ice cream parlor"
+  },
+  {
+    "name": "Tartine Bakery",
+    "expected_is_restaurant": true,
+    "reason": "Bakery open to public"
+  },
+  {
+    "name": "House of Prime Rib",
+    "expected_is_restaurant": true,
+    "reason": "Steakhouse"
+  },
+  {
+    "name": "Shake Shack",
+    "expected_is_restaurant": true,
+    "reason": "Fast casual burgers"
+  },
+  {
+    "name": "Din Tai Fung",
+    "expected_is_restaurant": true,
+    "reason": "Xiao long bao chain"
+  },
+  {
+    "name": "Chipotle Mexican Grill",
+    "expected_is_restaurant": true,
+    "reason": "Fast casual Mexican"
+  },
+  {
+    "name": "Starbucks",
+    "expected_is_restaurant": true,
+    "reason": "Coffee chain"
+  },
+  {
+    "name": "In-N-Out Burger",
+    "expected_is_restaurant": true,
+    "reason": "Fast food burgers"
+  },
+  {
+    "name": "Philz Coffee",
+    "expected_is_restaurant": true,
+    "reason": "Coffee shop"
+  },
+  {
+    "name": "Pizza My Heart",
+    "expected_is_restaurant": true,
+    "reason": "Pizzeria"
+  },
+  {
+    "name": "Ike's Love & Sandwiches",
+    "expected_is_restaurant": true,
+    "reason": "Sandwich shop"
+  },
+  {
+    "name": "La Taqueria",
+    "expected_is_restaurant": true,
+    "reason": "Taqueria"
+  },
+  {
+    "name": "Nobu Palo Alto",
+    "expected_is_restaurant": true,
+    "reason": "Fine dining Japanese"
+  },
+  {
+    "name": "Great China Restaurant",
+    "expected_is_restaurant": true,
+    "reason": "Chinese restaurant"
+  },
+  {
+    "name": "Peking Duck House",
+    "expected_is_restaurant": true,
+    "reason": "Peking duck specialist"
+  },
+  {
+    "name": "Sushi Ran",
+    "expected_is_restaurant": true,
+    "reason": "Sushi restaurant"
+  },
+  {
+    "name": "Kin Khao",
+    "expected_is_restaurant": true,
+    "reason": "Thai restaurant"
+  },
+  {
+    "name": "Smitten Ice Cream",
+    "expected_is_restaurant": true,
+    "reason": "Ice cream shop"
+  },
+  {
+    "name": "Burma Superstar",
+    "expected_is_restaurant": true,
+    "reason": "Burmese restaurant"
+  },
+  {
+    "name": "Mission Chinese Food",
+    "expected_is_restaurant": true,
+    "reason": "Modern Chinese restaurant"
+  },
+  {
+    "name": "Taqueria Guadalajara",
+    "expected_is_restaurant": true,
+    "reason": "Mexican taqueria"
+  },
+  {
+    "name": "Four Barrel Coffee",
+    "expected_is_restaurant": true,
+    "reason": "Coffee roaster cafe"
+  },
+  {
+    "name": "Flour + Water",
+    "expected_is_restaurant": true,
+    "reason": "Italian restaurant"
+  },
+  {
+    "name": "Zuni Cafe",
+    "expected_is_restaurant": true,
+    "reason": "California cuisine restaurant"
+  },
+  {
+    "name": "Delfina Pizzeria",
+    "expected_is_restaurant": true,
+    "reason": "Pizzeria"
+  },
+  {
+    "name": "Swan Oyster Depot",
+    "expected_is_restaurant": true,
+    "reason": "Seafood counter / eatery"
+  },
+  {
+    "name": "Brenda's French Soul Food",
+    "expected_is_restaurant": true,
+    "reason": "Soul food restaurant"
+  },
+  {
+    "name": "Gott's Roadside",
+    "expected_is_restaurant": true,
+    "reason": "Burger counter"
+  },
+
+  {
+    "name": "Costco Wholesale",
+    "expected_is_restaurant": false,
+    "reason": "Wholesale warehouse, not open-to-public restaurant"
+  },
+  {
+    "name": "Sysco Food Services",
+    "expected_is_restaurant": false,
+    "reason": "Food distributor to restaurants, not consumer-facing"
+  },
+  {
+    "name": "Cafeteria Plus Inc",
+    "expected_is_restaurant": false,
+    "reason": "School cafeteria operator / B2B"
+  },
+  {
+    "name": "Bon Appetit Management Company",
+    "expected_is_restaurant": false,
+    "reason": "Contract food service / corporate dining operator"
+  },
+  {
+    "name": "Safeway Store #2340",
+    "expected_is_restaurant": false,
+    "reason": "Grocery store (may have deli but registration is grocery)"
+  },
+  {
+    "name": "7-Eleven",
+    "expected_is_restaurant": false,
+    "reason": "Convenience store, not restaurant"
+  },
+  {
+    "name": "US Foods Distribution Center",
+    "expected_is_restaurant": false,
+    "reason": "Food distributor warehouse"
+  },
+  {
+    "name": "UCSF Medical Center Dining Services",
+    "expected_is_restaurant": false,
+    "reason": "Hospital cafeteria operator, not public restaurant"
+  },
+  {
+    "name": "Aramark Corporation",
+    "expected_is_restaurant": false,
+    "reason": "Institutional food service contractor"
+  },
+  {
+    "name": "Trader Joe's",
+    "expected_is_restaurant": false,
+    "reason": "Grocery chain"
+  },
+  {
+    "name": "Whole Foods Market",
+    "expected_is_restaurant": false,
+    "reason": "Grocery store"
+  },
+  {
+    "name": "Smart & Final",
+    "expected_is_restaurant": false,
+    "reason": "Warehouse grocery"
+  },
+  {
+    "name": "Kraft Heinz Company",
+    "expected_is_restaurant": false,
+    "reason": "CPG manufacturer"
+  },
+  {
+    "name": "Compass Group USA",
+    "expected_is_restaurant": false,
+    "reason": "Contract food service company"
+  },
+  {
+    "name": "Golden Gate Vending Machines",
+    "expected_is_restaurant": false,
+    "reason": "Vending machine operator"
+  },
+  {
+    "name": "Bay Area Commissary Kitchen LLC",
+    "expected_is_restaurant": false,
+    "reason": "Shared commissary / not consumer-facing"
+  },
+  {
+    "name": "Sunrise Senior Living Dining",
+    "expected_is_restaurant": false,
+    "reason": "Senior care facility dining"
+  },
+  {
+    "name": "Google Cafeteria Operations",
+    "expected_is_restaurant": false,
+    "reason": "Corporate cafeteria, not public"
+  }
+]
