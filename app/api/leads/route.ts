@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { LeadFilters } from '@/types/lead';
-import type { LeadRegionFilterId } from '@/lib/region-config';
+import { sourceIdsForRegion, type LeadRegionFilterId } from '@/lib/region-config';
 
 export async function GET(request: NextRequest) {
   try {
@@ -27,10 +27,14 @@ export async function GET(request: NextRequest) {
     if (status) {
       query = query.eq('lead_status', status);
     }
-    // 从 registry 动态解析 metro → source ids，不再硬编码。
-    // 老数据已由 supabase/schema.sql 的 migration 回填了 metro_area，只走 metro_area 过滤即可。
+    // 从 registry 动态解析 metro → source ids。
+    // 用 `source in (...)` 过滤（source 列始终存在），不依赖 metro_area 列，
+    // 这样 supabase migration 未执行时仍然可用。
     if (region && region !== 'all') {
-      query = query.eq('metro_area', region);
+      const srcIds = sourceIdsForRegion(region);
+      if (srcIds && srcIds.length > 0) {
+        query = query.in('source', srcIds);
+      }
     }
     if (city) {
       query = query.eq('city', city);
@@ -77,9 +81,15 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('[GET /api/leads]', error);
+    const msg = error instanceof Error ? error.message : String(error);
+    // Supabase "column does not exist" → 用户 migration 没跑，给出具体提示
+    const hint =
+      /column .* does not exist/i.test(msg) || /42703/.test(msg)
+        ? 'Supabase schema migration 未执行。请在 Supabase SQL Editor 运行 supabase/schema.sql 底部的 V1 migration 块，或暂时不要使用置信度筛选。'
+        : undefined;
     return NextResponse.json(
-      { error: '获取数据失败，请稍后重试' },
-      { status: 500 }
+      { error: '获取数据失败', detail: msg, hint },
+      { status: 500 },
     );
   }
 }
