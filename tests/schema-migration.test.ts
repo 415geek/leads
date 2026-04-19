@@ -90,4 +90,17 @@ describe('supabase/schema.sql is idempotent', () => {
     expect(sql).toMatch(/update leads set metro_area = 'sf_bay'/);
     expect(sql).toMatch(/update leads set metro_area = 'houston'/);
   });
+
+  it('ALL create trigger statements are preceded by DROP TRIGGER IF EXISTS', () => {
+    // Postgres 不支持 `create trigger if not exists`；必须先 drop 才能 re-run
+    const createTriggers = stmts.filter((s) => /^create trigger /.test(s));
+    for (const s of createTriggers) {
+      const triggerName = /create trigger (\w+)/.exec(s)?.[1];
+      expect(triggerName, `stmt: ${s}`).toBeTruthy();
+      const drop = stmts.find(
+        (d) => d.includes(`drop trigger if exists ${triggerName}`),
+      );
+      expect(drop, `expected DROP TRIGGER IF EXISTS ${triggerName} before CREATE`).toBeTruthy();
+    }
+  });
 });
