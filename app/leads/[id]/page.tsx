@@ -22,6 +22,7 @@ import { FilingHistoryPanel } from '@/components/filing-history-panel';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { dashboardBusinessSearchHref } from '@/lib/dashboard-business-search';
+import type { OpeningIntelWebPayload } from '@/lib/opening-intel-web';
 
 function displayOrDash(value: string | null | undefined): string {
   if (value === null || value === undefined) return '—';
@@ -61,6 +62,7 @@ export default function LeadDetailPage({
   const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [refreshingIntel, setRefreshingIntel] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notes, setNotes] = useState('');
   const [entityNumber, setEntityNumber] = useState('');
@@ -162,6 +164,40 @@ export default function LeadDetailPage({
     }
   };
 
+  function readOpeningIntelWeb(
+    leadLike: Lead | null,
+  ): OpeningIntelWebPayload | null {
+    const raw = leadLike?.ai_classification?.opening_intel_web;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const o = raw as Record<string, unknown>;
+    if (typeof o.updated_at !== 'string') return null;
+    if (typeof o.new_opening_confidence !== 'number') return null;
+    if (typeof o.transfer_confidence !== 'number') return null;
+    if (typeof o.summary_zh !== 'string') return null;
+    return o as unknown as OpeningIntelWebPayload;
+  }
+
+  const handleRefreshOpeningIntel = async () => {
+    if (!lead) return;
+    setRefreshingIntel(true);
+    try {
+      const response = await fetch(`/api/leads/${id}/opening-intel`, {
+        method: 'POST',
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(typeof body.error === 'string' ? body.error : '刷新失败');
+      }
+      if (body.lead) setLead(body.lead);
+      toast.success('联网情报已更新');
+    } catch (error) {
+      console.error('Failed to refresh opening intel:', error);
+      toast.error(error instanceof Error ? error.message : '刷新失败');
+    } finally {
+      setRefreshingIntel(false);
+    }
+  };
+
   const handleGenerateOutreach = async () => {
     if (!lead) return;
     
@@ -226,6 +262,75 @@ export default function LeadDetailPage({
       </div>
 
       <SfRegistrationSummary sourceRaw={lead.source_raw} />
+
+      <Card>
+        <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
+          <div>
+            <CardTitle>联网情报（新开 / 转手）</CardTitle>
+            <p className="text-sm font-normal text-muted-foreground mt-1">
+              手动刷新：可选联网摘要（需配置 TAVILY_API_KEY）+ Claude 生成置信度，结果缓存在{' '}
+              <code className="text-xs">ai_classification.opening_intel_web</code>。
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={refreshingIntel}
+            onClick={handleRefreshOpeningIntel}
+            className="shrink-0"
+          >
+            {refreshingIntel ? '分析中…' : readOpeningIntelWeb(lead) ? '重新刷新' : '刷新情报'}
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {(() => {
+            const web = readOpeningIntelWeb(lead);
+            if (!web) {
+              return (
+                <p className="text-sm text-muted-foreground">
+                  尚未生成。点击「刷新情报」将调用 AI（消耗 API 额度）。
+                </p>
+              );
+            }
+            return (
+              <>
+                <div className="flex flex-wrap gap-2 items-center text-sm">
+                  <span className="rounded-full bg-amber-100 text-amber-900 px-2.5 py-0.5 font-medium">
+                    转手 {web.transfer_confidence}%
+                  </span>
+                  <span className="rounded-full bg-sky-100 text-sky-900 px-2.5 py-0.5 font-medium">
+                    新开 {web.new_opening_confidence}%
+                  </span>
+                  <span className="text-muted-foreground text-xs">
+                    更新 {formatDateTime(web.updated_at)} · 摘要条数 {web.search_snippets_used}
+                  </span>
+                </div>
+                <p className="text-sm font-medium text-slate-900">{web.summary_zh}</p>
+                {web.rationale_zh ? (
+                  <p className="text-xs text-slate-600 whitespace-pre-wrap">{web.rationale_zh}</p>
+                ) : null}
+                {web.evidence?.length ? (
+                  <ul className="text-xs space-y-1 list-disc pl-4">
+                    {web.evidence.map((e, i) => (
+                      <li key={`${e.url}-${i}`}>
+                        <a
+                          href={e.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline break-all"
+                        >
+                          {e.title || e.url}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </>
+            );
+          })()}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="lg:col-span-2">

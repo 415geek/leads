@@ -40,6 +40,8 @@ export interface Lead {
   ca_entity_number?: string | null;
   /** 来源 API 全量字段，用于界面展示（旧数据或未跑迁移时可能为空） */
   source_raw?: LeadSourceRaw | null;
+  /** 分类/情报 JSON（含 datasf_opening、opening_intel_web 等） */
+  ai_classification?: Record<string, unknown> | null;
   lead_score: number;
   lead_status: LeadStatus;
   outreach_message: string | null;
