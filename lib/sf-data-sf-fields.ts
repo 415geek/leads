@@ -28,6 +28,7 @@ export interface SfG8m3Shape {
   dba_end_date?: unknown;
   location_start_date?: unknown;
   location_end_date?: unknown;
+  administratively_closed?: unknown;
   neighborhoods_analysis_boundaries?: unknown;
   business_corridor?: unknown;
   supervisor_district?: unknown;

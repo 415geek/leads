@@ -72,7 +72,7 @@ function makeSource(
 
 describe('ingestAll (pipeline)', () => {
   it('returns empty results when no sources', async () => {
-    const { sourceResults, drafts } = await ingestAll([], { sinceDate: '2026-01-01' });
+    const { sourceResults, drafts } = await ingestAll([], { lookbackDays: 30 });
     expect(sourceResults).toEqual([]);
     expect(drafts).toEqual([]);
   });
@@ -80,7 +80,7 @@ describe('ingestAll (pipeline)', () => {
   it('fan-outs all sources and collects drafts', async () => {
     const sources = [makeSource('a', 'ok', 2), makeSource('b', 'ok', 3)];
     const { sourceResults, drafts } = await ingestAll(sources, {
-      sinceDate: '2026-01-01',
+      lookbackDays: 30,
     });
     expect(sourceResults).toHaveLength(2);
     expect(sourceResults.every((r) => r.ok)).toBe(true);
@@ -94,7 +94,7 @@ describe('ingestAll (pipeline)', () => {
       makeSource('ok_b', 'ok', 3),
     ];
     const { sourceResults, drafts } = await ingestAll(sources, {
-      sinceDate: '2026-01-01',
+      lookbackDays: 30,
     });
     // 所有 3 个源都要出现在 results 里
     expect(sourceResults).toHaveLength(3);
@@ -115,7 +115,7 @@ describe('ingestAll (pipeline)', () => {
   it('handles rejected promise (async thrown)', async () => {
     const sources = [makeSource('ok', 'ok', 1), makeSource('bad', 'reject')];
     const { sourceResults, drafts } = await ingestAll(sources, {
-      sinceDate: '2026-01-01',
+      lookbackDays: 30,
     });
     expect(drafts).toHaveLength(1);
     expect(sourceResults.find((r) => r.id === 'bad')?.ok).toBe(false);
@@ -124,7 +124,7 @@ describe('ingestAll (pipeline)', () => {
   it('preserves adapter-reported errors (HTTP 500 style, not an exception)', async () => {
     const sources = [makeSource('ok', 'ok', 1), makeSource('http_err', 'http_err')];
     const { sourceResults, drafts } = await ingestAll(sources, {
-      sinceDate: '2026-01-01',
+      lookbackDays: 30,
     });
     expect(drafts).toHaveLength(1);
     const err = sourceResults.find((r) => r.id === 'http_err');
@@ -136,7 +136,7 @@ describe('ingestAll (pipeline)', () => {
     const sources = Array.from({ length: 8 }, (_, i) => makeSource(`src_${i}`, 'ok', 1));
     const start = Date.now();
     const { sourceResults, drafts } = await ingestAll(sources, {
-      sinceDate: '2026-01-01',
+      lookbackDays: 30,
     });
     const elapsed = Date.now() - start;
     expect(sourceResults).toHaveLength(8);

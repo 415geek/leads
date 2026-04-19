@@ -90,10 +90,13 @@ export async function runPipeline(
   opts: PipelineOptions = {},
 ): Promise<PipelineRunResult> {
   const sources = selectSources(opts);
-  const sinceDate = computeSinceDate(opts.lookbackDays ?? 30);
+  const defaultLookback = opts.lookbackDays ?? 30;
+  const sinceDate = computeSinceDate(defaultLookback);
 
-  // 1. ingest —— 并发拉取，错误隔离
-  const { sourceResults, drafts } = await ingestAll(sources, { sinceDate });
+  // 1. ingest —— 并发拉取，错误隔离（每源可用 lookbackDays 覆盖默认）
+  const { sourceResults, drafts } = await ingestAll(sources, {
+    lookbackDays: defaultLookback,
+  });
 
   // 2. classify —— Phase 1 pass-through；Phase 2 接 Claude Haiku
   const classified = opts.skipClassify
@@ -111,17 +114,26 @@ export async function runPipeline(
   const enrichmentCalls = enriched.filter((e) => e.enrichment?.fetched).length;
 
   // 4. score
-  const leads: PipelineLead[] = enriched.map((e) => ({
-    ...e.draft,
-    phone: e.enrichment?.formatted_phone ?? e.draft.phone,
-    is_restaurant_confidence: e.confidence,
-    ai_classification: e.raw as Record<string, unknown> | null,
-    lead_score: scoreDraft({
-      draft: e.draft,
-      confidence: e.confidence,
-      hasEnrichment: !!e.enrichment && e.enrichment.business_status === 'OPERATIONAL',
-    }),
-  }));
+  const leads: PipelineLead[] = enriched.map((e) => {
+    const cls = (e.raw as Record<string, unknown> | null) ?? null;
+    const mergedCls: Record<string, unknown> = { ...(cls ?? {}) };
+    if (e.draft.opening_signals) {
+      mergedCls.datasf_opening = e.draft.opening_signals;
+    }
+    const ai_classification = Object.keys(mergedCls).length ? mergedCls : null;
+
+    return {
+      ...e.draft,
+      phone: e.enrichment?.formatted_phone ?? e.draft.phone,
+      is_restaurant_confidence: e.confidence,
+      ai_classification,
+      lead_score: scoreDraft({
+        draft: e.draft,
+        confidence: e.confidence,
+        hasEnrichment: !!e.enrichment && e.enrichment.business_status === 'OPERATIONAL',
+      }),
+    };
+  });
 
   return {
     sinceDate,

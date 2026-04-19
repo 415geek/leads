@@ -127,6 +127,33 @@ describe('scoreDraft (scoreV2)', () => {
     expect(chinese).toBe(western);
   });
 
+  it('applies DataSF new-opening bonus for sf_gov + opening_signals', () => {
+    const base = scoreDraft({
+      draft: makeDraft({
+        license_date: daysAgoISO(3),
+        opening_signals: {
+          new_opening_score: 90,
+          new_opening_label: 'confirmed_new_opening',
+          transfer_score: 0,
+          transfer_label: 'none',
+          reason_codes: [],
+          is_new_at_location: true,
+          is_new_business_entity: true,
+          normalized_address_key: 'X',
+          manual_review_priority: 'low',
+        },
+      }),
+      confidence: 1.0,
+      hasEnrichment: false,
+    });
+    const noIntel = scoreDraft({
+      draft: makeDraft({ license_date: daysAgoISO(3) }),
+      confidence: 1.0,
+      hasEnrichment: false,
+    });
+    expect(base - noIntel).toBe(10);
+  });
+
   it('adds +10 for phone', () => {
     const withPhone = scoreDraft({
       draft: makeDraft({ phone: '415-555-1234' }),

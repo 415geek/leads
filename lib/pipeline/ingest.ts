@@ -7,14 +7,15 @@
  *   - 外层 cron 可能一次跑 8 源；用 concurrency limit 防止同时开 8 个 HTTP 连接池爆炸
  */
 
-import type {
-  FetchOptions,
-  FoodDataSource,
-  NormalizedDraft,
-  SourceFetchResult,
-} from '@/lib/sources/types';
+import type { FoodDataSource, NormalizedDraft, SourceFetchResult } from '@/lib/sources/types';
 
 const DEFAULT_CONCURRENCY = 4;
+
+function computeSinceDate(lookbackDays: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - lookbackDays);
+  return d.toISOString().split('T')[0];
+}
 
 async function runWithLimit<T, R>(
   items: readonly T[],
@@ -41,12 +42,14 @@ async function runWithLimit<T, R>(
 
 export async function ingestAll(
   sources: readonly FoodDataSource[],
-  opts: FetchOptions,
+  opts: { lookbackDays: number; limit?: number },
   concurrency = DEFAULT_CONCURRENCY,
 ): Promise<{ sourceResults: SourceFetchResult[]; drafts: NormalizedDraft[] }> {
-  const settled = await runWithLimit(sources, concurrency, (src) =>
-    src.fetchAndNormalize(opts),
-  );
+  const settled = await runWithLimit(sources, concurrency, (src) => {
+    const days = src.lookbackDays ?? opts.lookbackDays;
+    const sinceDate = computeSinceDate(days);
+    return src.fetchAndNormalize({ sinceDate, limit: opts.limit });
+  });
 
   const sourceResults: SourceFetchResult[] = [];
   const drafts: NormalizedDraft[] = [];

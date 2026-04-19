@@ -65,9 +65,9 @@ export function buildCuisineLabel(parts: {
   return '餐饮';
 }
 
-export function buildSfFoodServiceWhereClause(sinceDate: string): string {
-  const citiesIn = buildBayAreaCityUpperInListSoql();
-  const food =
+/** DataSF g8m3：餐饮业态 SoQL 片段（NAICS / 执照） */
+function sfFoodServiceSoqlFragment(): string {
+  return (
     `naic_code like '722%' ` +
     `OR naic_code like '%722%' ` +
     `OR naic_code_description like '%Food Service%' ` +
@@ -84,12 +84,40 @@ export function buildSfFoodServiceWhereClause(sinceDate: string): string {
     `OR lic_code_description like '%BAKERY%' ` +
     `OR lic_code_description like '%CAFE%' ` +
     `OR lic_code_description like '%EATING PLACE%' ` +
-    `OR lic_code_description like '%DINING%'`;
+    `OR lic_code_description like '%DINING%'`
+  );
+}
+
+/**
+ * 活跃餐饮门店 + 近 location_start_date（新址登记代理）
+ * 排除：已结束 DBA / 已结束 location / TTX 行政关闭（字段为文本标记）
+ */
+export function buildSfFoodServiceWhereClause(sinceDate: string): string {
+  const citiesIn = buildBayAreaCityUpperInListSoql();
+  const food = sfFoodServiceSoqlFragment();
 
   return (
     `state = 'CA' ` +
     `AND upper(trim(city)) in (${citiesIn}) ` +
     `AND location_start_date >= '${sinceDate}' ` +
+    `AND dba_end_date is null ` +
+    `AND location_end_date is null ` +
+    `AND administratively_closed is null ` +
+    `AND (${food})`
+  );
+}
+
+/**
+ * 已结束 location（用于同址转手时间序列）；location_end_date 下界
+ */
+export function buildSfClosedFoodWhereClause(locationEndSince: string): string {
+  const citiesIn = buildBayAreaCityUpperInListSoql();
+  const food = sfFoodServiceSoqlFragment();
+  return (
+    `state = 'CA' ` +
+    `AND upper(trim(city)) in (${citiesIn}) ` +
+    `AND location_end_date is not null ` +
+    `AND location_end_date >= '${locationEndSince}' ` +
     `AND (${food})`
   );
 }

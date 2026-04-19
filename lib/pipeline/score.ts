@@ -50,6 +50,22 @@ export interface ScoreInput {
   hasEnrichment: boolean;
 }
 
+function datasfOpeningBonus(draft: NormalizedDraft): number {
+  if (draft.source !== 'sf_gov' || !draft.opening_signals) return 0;
+  switch (draft.opening_signals.new_opening_label) {
+    case 'confirmed_new_opening':
+      return 10;
+    case 'likely_new_opening':
+      return 6;
+    case 'possible_new_opening':
+      return 0;
+    case 'weak_signal':
+      return -10;
+    default:
+      return 0;
+  }
+}
+
 export function scoreDraft(input: ScoreInput): number {
   const { draft, confidence, hasEnrichment } = input;
 
@@ -63,12 +79,14 @@ export function scoreDraft(input: ScoreInput): number {
 
   const hasPhone = !!draft.phone;
 
-  const score =
+  const base =
     40 * fresh +
     25 * Math.max(0, Math.min(1, conf)) +
     15 * metroW +
     (hasEnrichment ? 10 : 0) +
     (hasPhone ? 10 : 0);
+
+  const score = base + datasfOpeningBonus(draft);
 
   return Math.round(Math.max(0, Math.min(100, score)));
 }

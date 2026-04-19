@@ -6,6 +6,7 @@
  */
 
 import type { LeadSourceRaw } from '@/types/lead';
+import type { DatasfOpeningSignals } from '@/lib/datasf-opening-intel';
 
 /** 都会区代码；和 leads.metro_area 列一一对应 */
 export type MetroArea =
@@ -39,6 +40,8 @@ export interface NormalizedDraft {
   license_type: string | null;
   source_raw: LeadSourceRaw;
   lead_status: 'new';
+  /** DataSF 新开店/转手推断（仅 sf_gov 等有值） */
+  opening_signals?: DatasfOpeningSignals;
 }
 
 /** 单个数据源的拉取结果（run 摘要用） */
@@ -80,6 +83,10 @@ export interface FoodDataSource {
   readonly rateLimit: { rps: number; dailyCap?: number };
   /** 灰度开关：false 时 cron / UI 导入跳过（用于 Phase 3 按城市上线） */
   readonly enabled: boolean;
+  /**
+   * 覆盖 pipeline 默认 lookback；DataSF 新开店窗口建议 90 天（文档默认）
+   */
+  readonly lookbackDays?: number;
 
   /** 拉取 + 规整为 NormalizedDraft[]；不负责 score / classify / enrich */
   fetchAndNormalize(opts: FetchOptions): Promise<{

@@ -11,6 +11,7 @@
 import { fetchSanFranciscoFoodLeads } from '@/lib/bay-area-food-import/san-francisco';
 import type { FoodDataSource, NormalizedDraft } from './types';
 import { pickText } from '@/lib/bay-area-food-import/shared';
+import type { DatasfOpeningSignals } from '@/lib/datasf-opening-intel';
 
 export const sanFranciscoSource: FoodDataSource = {
   id: 'sf_gov',
@@ -21,6 +22,7 @@ export const sanFranciscoSource: FoodDataSource = {
   portalUrl: 'https://data.sfgov.org/',
   rateLimit: { rps: 3 },
   enabled: true,
+  lookbackDays: 90,
 
   async fetchAndNormalize({ sinceDate }) {
     const { result, leads } = await fetchSanFranciscoFoodLeads(sinceDate);
@@ -30,6 +32,7 @@ export const sanFranciscoSource: FoodDataSource = {
         pickText(raw.uniqueid) ??
         pickText(raw.certificate_number) ??
         pickText(raw.ttxid);
+      const opening_signals = raw.opening_signals as DatasfOpeningSignals | undefined;
       return {
         external_id: externalId,
         name: l.name,
@@ -45,6 +48,7 @@ export const sanFranciscoSource: FoodDataSource = {
         license_type: l.license_type,
         source_raw: l.source_raw,
         lead_status: 'new',
+        opening_signals,
       };
     });
     return { result, drafts };
