@@ -26,7 +26,11 @@ export async function POST(request: NextRequest) {
   const email = body.email?.trim().toLowerCase();
   const password = body.password ?? '';
 
-  const allowedPassword = email ? credentials.get(email) : undefined;
+  if (!email) {
+    return NextResponse.json({ error: '邮箱或密码错误' }, { status: 401 });
+  }
+
+  const allowedPassword = credentials.get(email);
   if (!allowedPassword) {
     return NextResponse.json({ error: '邮箱或密码错误' }, { status: 401 });
   }
