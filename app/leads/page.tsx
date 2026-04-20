@@ -287,12 +287,12 @@ export default function LeadsPage() {
               ))}
               。AI 分类层仅保留 &ldquo;是餐厅&rdquo; 的条目；Google Places enrichment 会在 Phase 2 启用。
             </p>
-            <div className="flex flex-wrap gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <Select
               value={region}
               onValueChange={(v) => v && setRegion(v as LeadRegionFilterId)}
             >
-              <SelectTrigger className="w-[220px]">
+              <SelectTrigger className="w-full sm:w-[220px]">
                 <SelectValue placeholder="地区" />
               </SelectTrigger>
               <SelectContent>
@@ -309,11 +309,11 @@ export default function LeadsPage() {
               placeholder="搜索餐厅名或地址..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-64"
+              className="w-full sm:w-64"
             />
             
             <Select value={status} onValueChange={(v) => v && setStatus(v)}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-full sm:w-40">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -326,7 +326,7 @@ export default function LeadsPage() {
             </Select>
             
             <Select value={city} onValueChange={(v) => v && setCity(v)}>
-              <SelectTrigger className="w-44">
+              <SelectTrigger className="w-full sm:w-44">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -339,7 +339,7 @@ export default function LeadsPage() {
             </Select>
 
             <Select value={minConfidence} onValueChange={(v) => v && setMinConfidence(v)}>
-              <SelectTrigger className="w-44">
+              <SelectTrigger className="w-full sm:w-44">
                 <SelectValue placeholder="AI 置信度" />
               </SelectTrigger>
               <SelectContent>
@@ -375,60 +375,122 @@ export default function LeadsPage() {
               暂无符合条件的 leads
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>餐厅名</TableHead>
-                  <TableHead>地址</TableHead>
-                  <TableHead>菜系</TableHead>
-                  <TableHead>评分</TableHead>
-                  <TableHead>状态</TableHead>
-                  <TableHead>开发信</TableHead>
-                  <TableHead className="text-right">操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              {/* 手机：纵向卡片，无需横向滑动即可看全字段 */}
+              <ul className="divide-y divide-border md:hidden">
                 {leads.map((lead) => (
-                  <TableRow key={lead.id}>
-                    <TableCell className="font-medium">{lead.name}</TableCell>
-                    <TableCell className="text-gray-500 max-w-xs truncate">
-                      {lead.address || '-'}
-                    </TableCell>
-                    <TableCell>{lead.cuisine_type || '-'}</TableCell>
-                    <TableCell>
-                      <ScoreBadge score={lead.lead_score} />
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={lead.lead_status} />
-                    </TableCell>
-                    <TableCell>
-                      {lead.outreach_message ? (
-                        <span className="text-green-600">✓ 已生成</span>
-                      ) : (
-                        <span className="text-gray-400">未生成</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex flex-wrap justify-end gap-2">
-                        <Link href={`/leads/${lead.id}`}>
-                          <Button variant="outline" size="sm">
-                            查看
-                          </Button>
-                        </Link>
-                        <Link
-                          href={dashboardBusinessSearchHref(lead.name, lead.city)}
-                          title="在 Dashboard 打开政府/新闻/社交搜索入口"
-                        >
-                          <Button variant="secondary" size="sm" className="whitespace-nowrap">
-                            商业搜索
-                          </Button>
-                        </Link>
+                  <li key={lead.id} className="px-4 py-4 space-y-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <p className="font-semibold text-foreground leading-snug break-words">
+                          {lead.name}
+                        </p>
+                        <p className="text-sm text-muted-foreground break-words">
+                          {lead.address || '—'}
+                        </p>
                       </div>
-                    </TableCell>
-                  </TableRow>
+                      <div className="flex flex-wrap items-center gap-2 sm:flex-col sm:items-end sm:shrink-0">
+                        <ScoreBadge score={lead.lead_score} />
+                        <StatusBadge status={lead.lead_status} />
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                      <span>
+                        菜系：<span className="text-foreground">{lead.cuisine_type || '—'}</span>
+                      </span>
+                      <span aria-hidden className="text-border select-none">
+                        ·
+                      </span>
+                      <span>
+                        开发信：{' '}
+                        {lead.outreach_message ? (
+                          <span className="text-green-600 font-medium">已生成</span>
+                        ) : (
+                          <span className="text-muted-foreground">未生成</span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <Link href={`/leads/${lead.id}`} className="block w-full">
+                        <Button
+                          size="sm"
+                          className="w-full bg-[#1e3a5f] text-white hover:bg-[#163152]"
+                        >
+                          查看详情
+                        </Button>
+                      </Link>
+                      <Link
+                        href={dashboardBusinessSearchHref(lead.name, lead.city)}
+                        title="在 Dashboard 打开政府/新闻/社交搜索入口"
+                        className="block w-full"
+                      >
+                        <Button variant="outline" size="sm" className="w-full">
+                          商业搜索
+                        </Button>
+                      </Link>
+                    </div>
+                  </li>
                 ))}
-              </TableBody>
-            </Table>
+              </ul>
+
+              {/* 桌面：表格 */}
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>餐厅名</TableHead>
+                      <TableHead>地址</TableHead>
+                      <TableHead>菜系</TableHead>
+                      <TableHead>评分</TableHead>
+                      <TableHead>状态</TableHead>
+                      <TableHead>开发信</TableHead>
+                      <TableHead className="text-right">操作</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {leads.map((lead) => (
+                      <TableRow key={lead.id}>
+                        <TableCell className="font-medium">{lead.name}</TableCell>
+                        <TableCell className="text-gray-500 max-w-xs truncate">
+                          {lead.address || '-'}
+                        </TableCell>
+                        <TableCell>{lead.cuisine_type || '-'}</TableCell>
+                        <TableCell>
+                          <ScoreBadge score={lead.lead_score} />
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge status={lead.lead_status} />
+                        </TableCell>
+                        <TableCell>
+                          {lead.outreach_message ? (
+                            <span className="text-green-600">✓ 已生成</span>
+                          ) : (
+                            <span className="text-gray-400">未生成</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex flex-wrap justify-end gap-2">
+                            <Link href={`/leads/${lead.id}`}>
+                              <Button variant="outline" size="sm">
+                                查看
+                              </Button>
+                            </Link>
+                            <Link
+                              href={dashboardBusinessSearchHref(lead.name, lead.city)}
+                              title="在 Dashboard 打开政府/新闻/社交搜索入口"
+                            >
+                              <Button variant="secondary" size="sm" className="whitespace-nowrap">
+                                商业搜索
+                              </Button>
+                            </Link>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
