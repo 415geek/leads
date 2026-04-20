@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyOpeningIntelHeuristics,
   mergeAiClassificationOpeningWeb,
   parseOpeningIntelJsonObject,
 } from '@/lib/opening-intel-web';
+import type { Lead } from '@/types/lead';
 
 describe('opening-intel-web', () => {
   it('parseOpeningIntelJsonObject handles raw JSON object', () => {
@@ -38,6 +40,23 @@ describe('opening-intel-web', () => {
     expect((merged.datasf_opening as { x: number }).x).toBe(1);
     expect(merged.opening_intel_web).toBeDefined();
     expect((merged.opening_intel_web as { summary_zh: string }).summary_zh).toBe('s');
+  });
+
+  it('applyOpeningIntelHeuristics flags existing business when many reviews in snippets', () => {
+    const lead = { source: 'lacounty_restaurant_inspect' } as Lead;
+    const tuned = applyOpeningIntelHeuristics({
+      lead,
+      snippets: [
+        { title: 'Yelp', url: 'https://yelp.com/x', content: '288 reviews and 300 photos' },
+      ],
+      parsed: { summary_zh: '测试', rationale_zh: '' },
+      newPct: 40,
+      transferPct: 35,
+      scenario: 'new_opening_likely',
+    });
+    expect(tuned.scenario).toBe('existing_permit_renewal');
+    expect(tuned.newPct).toBeLessThanOrEqual(12);
+    expect(tuned.transferPct).toBeLessThanOrEqual(12);
   });
 
   it('mergeAiClassificationOpeningWeb replaces prior opening_intel_web', () => {

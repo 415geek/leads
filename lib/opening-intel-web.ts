@@ -13,6 +13,13 @@ export interface OpeningIntelWebEvidence {
   url: string;
 }
 
+/** 联网情报场景（与 CRM lead_status 无关） */
+export type OpeningIntelScenario =
+  | 'new_opening_likely'
+  | 'transfer_likely'
+  | 'existing_permit_renewal'
+  | 'insufficient_evidence';
+
 /** 写入 ai_classification.opening_intel_web 的快照 */
 export interface OpeningIntelWebPayload {
   updated_at: string;
@@ -23,6 +30,10 @@ export interface OpeningIntelWebPayload {
   rationale_zh: string;
   search_snippets_used: number;
   evidence: OpeningIntelWebEvidence[];
+  /** 结构化场景；旧数据可能缺省 */
+  scenario?: OpeningIntelScenario;
+  /** 与 scenario 对应的中文短标签（供 UI） */
+  scenario_label_zh?: string;
 }
 
 function isRecord(x: unknown): x is Record<string, unknown> {
@@ -40,6 +51,8 @@ export function parseOpeningIntelJsonObject(text: string): {
   transfer_confidence?: unknown;
   summary_zh?: unknown;
   rationale_zh?: unknown;
+  scenario?: unknown;
+  scenario_label_zh?: unknown;
 } | null {
   const t = text.trim();
   const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -112,6 +125,68 @@ function leadContextBlock(lead: Lead): string {
   return parts.join('\n');
 }
 
+const SCENARIO_LABELS: Record<OpeningIntelScenario, string> = {
+  new_opening_likely: '更可能为新开门店',
+  transfer_likely: '更可能为转手/接盘',
+  existing_permit_renewal: '已存在店铺，牌照更新',
+  insufficient_evidence: '证据不足',
+};
+
+function normalizeScenario(raw: unknown): OpeningIntelScenario {
+  const s = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  if (
+    s === 'existing_permit_renewal' ||
+    s === 'existing_business' ||
+    s === 'permit_renewal' ||
+    s === 'renewal'
+  ) {
+    return 'existing_permit_renewal';
+  }
+  if (s === 'transfer_likely' || s === 'transfer') return 'transfer_likely';
+  if (s === 'new_opening_likely' || s === 'new_opening') return 'new_opening_likely';
+  return 'insufficient_evidence';
+}
+
+/**
+ * 基于摘要/摘要条中的「大量评论、多年经营、续期」等模式压低新开/转手分，并纠正场景。
+ * （导出供单元测试）
+ */
+export function applyOpeningIntelHeuristics(args: {
+  lead: Lead;
+  snippets: TavilySnippet[];
+  parsed: Record<string, unknown>;
+  newPct: number;
+  transferPct: number;
+  scenario: OpeningIntelScenario;
+}): { newPct: number; transferPct: number; scenario: OpeningIntelScenario } {
+  let { newPct, transferPct, scenario } = args;
+  const blob = [
+    String(args.parsed.summary_zh ?? ''),
+    String(args.parsed.rationale_zh ?? ''),
+    ...args.snippets.map((s) => `${s.title} ${s.content}`),
+  ]
+    .join('\n')
+    .toLowerCase();
+
+  const manyReviews =
+    /\b([3-9]\d|\d{3,})\s*reviews?\b/i.test(blob) ||
+    /\b\d{2,}\s*条(评价|评论)/.test(blob) ||
+    /\byelp\b.*\b\d{2,}\b/.test(blob);
+
+  const longRunningHints =
+    /多年|数年|长期经营|老牌|established\s+\d{4}|operating\s+for\s+(many\s+)?years|since\s+\d{4}/i.test(
+      blob,
+    );
+
+  if (manyReviews || longRunningHints) {
+    scenario = 'existing_permit_renewal';
+    newPct = Math.min(newPct, 12);
+    transferPct = Math.min(transferPct, 12);
+  }
+
+  return { newPct, transferPct, scenario };
+}
+
 /**
  * 调用 Claude + 可选联网摘要，生成新开/转手置信度（0–100）与中文摘要。
  */
@@ -133,11 +208,17 @@ export async function runOpeningIntelWeb(lead: Lead): Promise<OpeningIntelWebPay
   const system = `你是餐饮门店情报分析助手。根据用户提供的店铺结构化字段与可选的网页摘要，估计：
 - new_opening_confidence：该址/该主体为「新开门店」的置信度 0-100 整数
 - transfer_confidence：该址/该主体为「转手/接盘（换老板或换牌续营）」的置信度 0-100 整数
+- scenario：下列之一（英文枚举，必须小写）：
+  - new_opening_likely — 更像真实新开
+  - transfer_likely — 更像转手/接盘
+  - existing_permit_renewal — 明显为已营业多年的老店，政府侧日期更像例行检查/续牌/续期而非新开业（例如点评/Yelp 已有大量历史评论、媒体报道多年经营等）
+  - insufficient_evidence — 证据不足
 
 规则：
-- 二者可以同时偏高（例如新牌接盘也是新开实体）。
+- 若摘要或常识表明店铺已长期营业（如「200+ reviews」「多年」「since 20xx 年」），必须把 scenario 设为 existing_permit_renewal，并把 new_opening_confidence、transfer_confidence 都压到 ≤15。
+- 二者可以同时偏高仅适用于**确实可能**新牌接盘且无明显长期营业反证时。
 - 仅输出一个 JSON 对象，不要 markdown，不要其它文字。
-- 字段：new_opening_confidence, transfer_confidence, summary_zh（≤80字）, rationale_zh（≤120字，简述依据）`;
+- 字段：new_opening_confidence, transfer_confidence, scenario, summary_zh（≤80字）, rationale_zh（≤120字，简述依据）`;
 
   const user = `【结构化字段】
 ${leadContextBlock(lead)}
@@ -163,6 +244,29 @@ ${searchBlock}`;
     throw new Error('Failed to parse opening intel JSON from model');
   }
 
+  let newPct = clampPct(parsed.new_opening_confidence);
+  let transferPct = clampPct(parsed.transfer_confidence);
+  let scenario = normalizeScenario(parsed.scenario);
+
+  const tuned = applyOpeningIntelHeuristics({
+    lead,
+    snippets,
+    parsed: parsed as Record<string, unknown>,
+    newPct,
+    transferPct,
+    scenario,
+  });
+  newPct = tuned.newPct;
+  transferPct = tuned.transferPct;
+  scenario = tuned.scenario;
+
+  const scenario_label_zh =
+    scenario === 'existing_permit_renewal'
+      ? SCENARIO_LABELS.existing_permit_renewal
+      : typeof parsed.scenario_label_zh === 'string' && parsed.scenario_label_zh.trim()
+        ? String(parsed.scenario_label_zh).slice(0, 40)
+        : SCENARIO_LABELS[scenario];
+
   const evidence: OpeningIntelWebEvidence[] = snippets.map((s) => ({
     title: s.title,
     url: s.url,
@@ -171,12 +275,14 @@ ${searchBlock}`;
   return {
     updated_at: new Date().toISOString(),
     model: CLASSIFY_MODEL,
-    new_opening_confidence: clampPct(parsed.new_opening_confidence),
-    transfer_confidence: clampPct(parsed.transfer_confidence),
+    new_opening_confidence: newPct,
+    transfer_confidence: transferPct,
     summary_zh: String(parsed.summary_zh ?? '').slice(0, 200),
     rationale_zh: String(parsed.rationale_zh ?? '').slice(0, 300),
     search_snippets_used: snippets.length,
     evidence,
+    scenario,
+    scenario_label_zh,
   };
 }
 

@@ -10,7 +10,7 @@ import type { MetroArea, MetroConfig } from './types';
 export const METRO_CONFIGS: readonly MetroConfig[] = [
   {
     id: 'la',
-    label: '洛杉矶（LA County EH 餐饮检查 · ArcGIS）',
+    label: '洛杉矶（LA County EH · 默认仅新设施首次检查窗口 · ArcGIS）',
     shortLabel: '洛杉矶',
     cities: ['Los Angeles', 'Long Beach', 'Pasadena', 'Santa Monica', 'Glendale'],
     openDataUrl: 'https://lacounty.gov/',

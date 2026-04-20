@@ -287,13 +287,36 @@ export default function LeadDetailPage({
                 </p>
               );
             }
+            const isExistingRenewal = web.scenario === 'existing_permit_renewal';
             return (
               <>
+                {isExistingRenewal ? (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-emerald-950">
+                    <p className="text-sm font-semibold">
+                      {web.scenario_label_zh ?? '已存在店铺，牌照更新'}
+                    </p>
+                    <p className="text-xs text-emerald-900/80 mt-1">
+                      政府侧日期多为例行检查或许可续期，非真实新开/转手；下方概率已压低仅供参考。
+                    </p>
+                  </div>
+                ) : null}
                 <div className="flex flex-wrap gap-2 items-center text-sm">
-                  <span className="rounded-full bg-amber-100 text-amber-900 px-2.5 py-0.5 font-medium">
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 font-medium ${
+                      isExistingRenewal
+                        ? 'bg-slate-100 text-slate-600'
+                        : 'bg-amber-100 text-amber-900'
+                    }`}
+                  >
                     转手 {web.transfer_confidence}%
                   </span>
-                  <span className="rounded-full bg-sky-100 text-sky-900 px-2.5 py-0.5 font-medium">
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 font-medium ${
+                      isExistingRenewal
+                        ? 'bg-slate-100 text-slate-600'
+                        : 'bg-sky-100 text-sky-900'
+                    }`}
+                  >
                     新开 {web.new_opening_confidence}%
                   </span>
                   <span className="text-muted-foreground text-xs">
