@@ -7,6 +7,7 @@
 
 import type { LeadSourceRaw } from '@/types/lead';
 import type { DatasfOpeningSignals } from '@/lib/datasf-opening-intel';
+import type { HoustonOpeningIntel } from '@/lib/houston-opening-intel';
 
 /** 都会区代码；和 leads.metro_area 列一一对应 */
 export type MetroArea =
@@ -42,6 +43,8 @@ export interface NormalizedDraft {
   lead_status: 'new';
   /** DataSF 新开店/转手推断（仅 sf_gov 等有值） */
   opening_signals?: DatasfOpeningSignals;
+  /** 休斯顿多源：DBA / TX SOS /（未来）食品许可 —— 写入 ai_classification.houston_opening */
+  houston_opening?: HoustonOpeningIntel;
 }
 
 /** 单个数据源的拉取结果（run 摘要用） */

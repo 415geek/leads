@@ -49,7 +49,8 @@ export const METRO_CONFIGS: readonly MetroConfig[] = [
   },
   {
     id: 'houston',
-    label: '休斯顿（HDHHS 检查 + Planning Permit Web eReport）',
+    label:
+      '休斯顿（HDHHS 检查 + 规划局 eReport + Harris DBA/TX SOS 可选 JSON 补充）',
     shortLabel: '休斯顿',
     cities: ['Houston'],
     openDataUrl: 'https://data.houstontx.gov/',

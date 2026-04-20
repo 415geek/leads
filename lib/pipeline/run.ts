@@ -120,6 +120,18 @@ export async function runPipeline(
     if (e.draft.opening_signals) {
       mergedCls.datasf_opening = e.draft.opening_signals;
     }
+    if (e.draft.houston_opening) {
+      mergedCls.houston_opening = e.draft.houston_opening;
+    }
+    if (
+      e.draft.houston_opening?.display_status === 'pre-opening' &&
+      e.enrichment?.business_status === 'OPERATIONAL'
+    ) {
+      mergedCls.houston_google_signals = {
+        soft_opening: true,
+        google_business_status: e.enrichment.business_status,
+      };
+    }
     const ai_classification = Object.keys(mergedCls).length ? mergedCls : null;
 
     return {

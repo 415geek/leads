@@ -14,6 +14,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { runPipeline, type PipelineLead } from '@/lib/pipeline/run';
 import { dedupePipelineLeads } from '@/lib/pipeline/dedupe';
+import { mergeHoustonCrossSourceLeads } from '@/lib/pipeline/houston-merge';
 import { enabledSources } from '@/lib/sources/registry';
 import { getDailyEnrichCount } from '@/lib/pipeline/enrich';
 
@@ -60,7 +61,7 @@ export async function GET(request: Request) {
   const { sinceDate, sourceResults, leads, droppedNonRestaurant, enrichmentCalls } =
     await runPipeline({ sourceIds: activeSourceIds });
 
-  const deduped = dedupePipelineLeads(leads);
+  const deduped = mergeHoustonCrossSourceLeads(dedupePipelineLeads(leads));
   const withExt = deduped.filter((r) => !!r.external_id);
   const withoutExt = deduped.filter((r) => !r.external_id);
 

@@ -14,6 +14,9 @@ import { sanFranciscoSource } from './san-francisco';
 import { berkeleySource } from './berkeley';
 import { houstonSource } from './houston';
 import { houstonPermitEreportSource } from './houston-permit-ereport';
+import { harrisCountyDbaSource } from './harris-county-dba';
+import { txSosHoustonSupplementSource } from './tx-sos-houston-supplement';
+import { houstonHealthFoodPermitPlaceholderSource } from './houston-health-food-permit-placeholder';
 import { nycSource } from './nyc';
 import { chicagoSource } from './chicago';
 import { austinSource } from './austin';
@@ -26,6 +29,9 @@ export const SOURCE_REGISTRY: readonly FoodDataSource[] = [
   berkeleySource,
   houstonSource,
   houstonPermitEreportSource,
+  harrisCountyDbaSource,
+  txSosHoustonSupplementSource,
+  houstonHealthFoodPermitPlaceholderSource,
   nycSource, // enabled
   chicagoSource, // enabled
   austinSource, // enabled

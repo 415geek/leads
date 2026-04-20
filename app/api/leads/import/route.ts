@@ -28,6 +28,7 @@ import {
 } from '@/lib/sources/registry';
 import { runPipeline } from '@/lib/pipeline/run';
 import { dedupePipelineLeads } from '@/lib/pipeline/dedupe';
+import { mergeHoustonCrossSourceLeads } from '@/lib/pipeline/houston-merge';
 import { writePipelineLeads } from '@/lib/pipeline/write-leads';
 import { decideImportMode, CHINESE_TAGS } from '@/lib/pipeline/api-helpers';
 
@@ -81,7 +82,7 @@ export async function POST(request: Request) {
       skipEnrich: true,
     });
 
-    const deduped: typeof leads = dedupePipelineLeads(leads);
+    const deduped: typeof leads = mergeHoustonCrossSourceLeads(dedupePipelineLeads(leads));
 
     if (deduped.length === 0) {
       const anyOk = sourceResults.some((s) => s.ok);

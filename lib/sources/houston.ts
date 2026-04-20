@@ -11,6 +11,10 @@
 import { fetchHoustonFoodLeads } from '@/lib/houston-food-import/houston';
 import type { FoodDataSource, NormalizedDraft } from './types';
 import { pickText } from '@/lib/bay-area-food-import/shared';
+import {
+  isLikelyHoustonChainName,
+  matchesHoustonRestaurantKeyword,
+} from '@/lib/houston-opening-intel';
 
 function stableId(name: string, address: string | null): string {
   const s = `${name.toLowerCase()}|${(address || '').toLowerCase()}`;
@@ -30,13 +34,27 @@ export const houstonSource: FoodDataSource = {
   rateLimit: { rps: 2 },
   enabled: true,
 
-  async fetchAndNormalize() {
+  async fetchAndNormalize(opts) {
     const { result, leads } = await fetchHoustonFoodLeads();
-    const drafts: NormalizedDraft[] = leads.map((l) => {
+    const drafts: NormalizedDraft[] = [];
+    const since = opts.sinceDate;
+    for (const l of leads) {
+      if (since && l.license_date && l.license_date < since) continue;
+      if (isLikelyHoustonChainName(l.name)) continue;
+      const nameKw = matchesHoustonRestaurantKeyword(l.name);
       const raw = l.source_raw as Record<string, unknown>;
+      const facility = pickText(raw['FACILITY TYPE']) ?? '';
+      if (
+        process.env.HOUSTON_HDHHS_STRICT_NAME_KEYWORDS === '1' &&
+        !nameKw.ok &&
+        !/(restaurant|cafe|bakery|grill|bbq|taco|kitchen|bar\b)/i.test(facility)
+      ) {
+        continue;
+      }
+
       const peNum = pickText(raw['PE#']) ?? pickText(raw['PE NO']) ?? pickText(raw['PE']);
       const externalId = peNum ?? stableId(l.name, l.address);
-      return {
+      drafts.push({
         external_id: externalId,
         name: l.name,
         address: l.address,
@@ -51,8 +69,18 @@ export const houstonSource: FoodDataSource = {
         license_type: l.license_type,
         source_raw: l.source_raw,
         lead_status: 'new',
-      };
-    });
-    return { result, drafts };
+        houston_opening: {
+          display_status: 'health_inspection_facility',
+          display_source: 'HDHHS Inspection',
+          confidence_score: 'MEDIUM',
+          keyword_hits: nameKw.ok ? nameKw.hits : undefined,
+        },
+      });
+    }
+    const adjustedResult =
+      drafts.length !== leads.length
+        ? { ...result, fetched: drafts.length }
+        : result;
+    return { result: adjustedResult, drafts };
   },
 };
