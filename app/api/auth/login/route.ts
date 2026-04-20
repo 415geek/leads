@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSessionToken, getSessionCookieName } from '@/lib/session';
 import { verifyPasswordConstantTime } from '@/lib/auth-password';
+import { getAuthCredentialMap, isAuthSecretConfigured } from '@/lib/auth-users';
 
 export async function POST(request: NextRequest) {
-  const secret = process.env.AUTH_SECRET;
-  const allowedEmail = process.env.AUTH_ALLOWED_EMAIL?.trim().toLowerCase();
-  const allowedPassword = process.env.AUTH_PASSWORD;
+  const credentials = getAuthCredentialMap();
 
-  if (!secret || secret.length < 16 || !allowedEmail || !allowedPassword) {
+  if (!isAuthSecretConfigured() || credentials.size === 0) {
     return NextResponse.json(
-      { error: '登录服务未配置（缺少 AUTH_SECRET / AUTH_ALLOWED_EMAIL / AUTH_PASSWORD）' },
+      {
+        error:
+          '登录服务未配置（需要 AUTH_SECRET≥16 字符，且至少配置 AUTH_ALLOWED_EMAIL+AUTH_PASSWORD 或 AUTH_USERS_JSON）',
+      },
       { status: 503 },
     );
   }
@@ -24,7 +26,8 @@ export async function POST(request: NextRequest) {
   const email = body.email?.trim().toLowerCase();
   const password = body.password ?? '';
 
-  if (email !== allowedEmail) {
+  const allowedPassword = email ? credentials.get(email) : undefined;
+  if (!allowedPassword) {
     return NextResponse.json({ error: '邮箱或密码错误' }, { status: 401 });
   }
 
@@ -32,7 +35,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '邮箱或密码错误' }, { status: 401 });
   }
 
-  const token = await createSessionToken(allowedEmail);
+  const token = await createSessionToken(email);
   if (!token) {
     return NextResponse.json({ error: '无法创建会话' }, { status: 500 });
   }

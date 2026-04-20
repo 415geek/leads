@@ -264,23 +264,17 @@ export default function LeadDetailPage({
       <SfRegistrationSummary sourceRaw={lead.source_raw} />
 
       <Card>
-        <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
-          <div>
-            <CardTitle>联网情报（新开 / 转手）</CardTitle>
-            <p className="text-sm font-normal text-muted-foreground mt-1">
-              手动刷新：可选联网摘要（需配置 TAVILY_API_KEY）+ Claude 生成置信度，结果缓存在{' '}
-              <code className="text-xs">ai_classification.opening_intel_web</code>。
-            </p>
-          </div>
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
+          <CardTitle>联网情报（新开 / 转手）</CardTitle>
           <Button
             type="button"
-            variant="secondary"
+            variant="default"
             size="sm"
             disabled={refreshingIntel}
             onClick={handleRefreshOpeningIntel}
-            className="shrink-0"
+            className="shrink-0 bg-[#1e3a5f] text-white shadow-sm hover:bg-[#163152] focus-visible:ring-[#1e3a5f]/40"
           >
-            {refreshingIntel ? '分析中…' : readOpeningIntelWeb(lead) ? '重新刷新' : '刷新情报'}
+            {refreshingIntel ? '分析中…' : 'AI 分析'}
           </Button>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -289,7 +283,7 @@ export default function LeadDetailPage({
             if (!web) {
               return (
                 <p className="text-sm text-muted-foreground">
-                  尚未生成。点击「刷新情报」将调用 AI（消耗 API 额度）。
+                  尚未生成。点击「AI 分析」将调用 AI（消耗 API 额度）。
                 </p>
               );
             }
