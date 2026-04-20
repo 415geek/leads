@@ -5,7 +5,7 @@
  *   1. 没有 external_id（旧数据源没抓）
  *   2. 没有 metro_area（旧字段未补）
  *   3. 有 region 字段（旧 UI 发的）
- *   4. source 是 'sf_gov' / 'houston_hdhhs' / 'berkeley_open_data'（registry 注册的 id）
+ *   4. source 是 'sf_gov' / 'houston_hdhhs' / 'houston_permit_ereport' / 'lacounty_restaurant_inspect' / 'berkeley_open_data'（registry 注册的 id）
  *
  * 这个测试锁定：
  *   - getSourceById 能认出 n8n 发的所有 source id，并回填 metro
@@ -28,6 +28,8 @@ describe('n8n webhook backward compatibility', () => {
     expect(getSourceById('sf_gov')?.metro).toBe('sf_bay');
     expect(getSourceById('berkeley_open_data')?.metro).toBe('sf_bay');
     expect(getSourceById('houston_hdhhs')?.metro).toBe('houston');
+    expect(getSourceById('houston_permit_ereport')?.metro).toBe('houston');
+    expect(getSourceById('lacounty_restaurant_inspect')?.metro).toBe('la');
   });
 
   it('parseMetroInput accepts legacy `region` field from old n8n payloads', () => {

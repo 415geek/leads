@@ -187,5 +187,8 @@ create index if not exists idx_classification_created
 update leads set metro_area = 'sf_bay'
   where metro_area is null and source in ('sf_gov', 'berkeley_open_data');
 update leads set metro_area = 'houston'
-  where metro_area is null and source = 'houston_hdhhs';
+  where metro_area is null and source in ('houston_hdhhs', 'houston_permit_ereport');
+update leads set metro_area = 'la'
+  where metro_area is null
+    and source in ('lacounty_restaurant_inspect', 'lacity_restaurant_inspect', 'la_county_dph');
 -- 其他/未知 source 不强行归类，保持 NULL，由后续 adapter 注册后的新入库数据自然填入

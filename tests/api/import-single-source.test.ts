@@ -16,14 +16,21 @@ import { writePipelineLeads } from '@/lib/pipeline/write-leads';
 import type { PipelineLead } from '@/lib/pipeline/run';
 import type { MetroArea } from '@/lib/sources/types';
 
-const KNOWN_SOURCES = ['sf_gov', 'berkeley_open_data', 'houston_hdhhs', 'nyc_dohmh'];
+const KNOWN_SOURCES = [
+  'sf_gov',
+  'berkeley_open_data',
+  'houston_hdhhs',
+  'houston_permit_ereport',
+  'nyc_dohmh',
+];
 
 const helpers = {
   enabledMetros: () =>
     ['sf_bay', 'houston', 'nyc'] as readonly MetroArea[],
   sourcesForMetro: (m: MetroArea) => {
     if (m === 'sf_bay') return [{ id: 'sf_gov' }, { id: 'berkeley_open_data' }];
-    if (m === 'houston') return [{ id: 'houston_hdhhs' }];
+    if (m === 'houston')
+      return [{ id: 'houston_hdhhs' }, { id: 'houston_permit_ereport' }];
     if (m === 'nyc') return [{ id: 'nyc_dohmh' }];
     return [];
   },
@@ -54,7 +61,7 @@ describe('decideImportMode', () => {
   it('legacy region field still works (n8n backward compat)', () => {
     const d = decideImportMode({ region: 'houston' }, helpers);
     expect(d.mode).toBe('metro');
-    expect(d.sourceIds).toEqual(['houston_hdhhs']);
+    expect(d.sourceIds).toEqual(['houston_hdhhs', 'houston_permit_ereport']);
   });
 
   it('unknown sourceId returns invalid', () => {

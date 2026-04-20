@@ -1,12 +1,8 @@
 /**
  * Seattle / LA / Boston adapters —— 骨架测试
  *
- * 这三个源默认 enabled=false（待核实 Socrata/CKAN resource id 和字段名）。
- * 测试验证 normalize 函数对典型 schema 行为正确 —— fixture 以门户公开字段命名为准。
- * 上线前需：
- *   1. 访问对应数据门户，核实 resource id 与字段列（尤其是 inspection_date 字段名）
- *   2. 调整 normalizeRow 以及 fetchAndNormalize 的 where 子句
- *   3. 把 enabled 改为 true
+ * LA：已切换为 LA County ArcGIS FeatureServer（现行季度数据）；normalize 以字段名为准。
+ * Seattle / Boston 仍默认 enabled=false（待核实 resource）。
  */
 
 import { describe, it, expect } from 'vitest';
@@ -41,32 +37,29 @@ describe('Seattle (King County) adapter', () => {
   });
 });
 
-describe('LA County DPH adapter', () => {
-  it('uses pe_number as external_id, activity_date as inspection', () => {
+describe('LA County EH (ArcGIS) adapter', () => {
+  it('uses FACILITY_ID as external_id and ACTIVITY_DATE epoch as inspection', () => {
+    const ms = new Date('2026-03-12T00:00:00.000Z').getTime();
     const d = _laNormalizeRowForTests({
-      facility_name: 'Tacos El Gavilan',
-      facility_address: '4309 Whittier Blvd',
-      facility_city: 'Los Angeles',
-      pe_number: 'PE12345',
-      activity_date: '2026-03-12',
-      program_name: 'RESTAURANT (0-30) SEATS LOW RISK',
+      FACILITY_NAME: 'Tacos El Gavilan',
+      FACILITY_ADDRESS: '4309 Whittier Blvd',
+      FACILITY_CITY: 'LOS ANGELES',
+      FACILITY_STATE: 'CA',
+      FACILITY_ZIP: '90023',
+      FACILITY_ID: 'FA12345',
+      ACTIVITY_DATE: ms,
+      PE_DESCRIPTION: 'RESTAURANT (0-30) SEATS LOW RISK',
+      PROGRAM_NAME: 'TACOS EL GAVILAN',
     });
-    expect(d!.external_id).toBe('PE12345');
+    expect(d!.external_id).toBe('FA12345');
     expect(d!.license_date).toBe('2026-03-12');
     expect(d!.metro_area).toBe('la');
+    expect(d!.source).toBe('lacounty_restaurant_inspect');
     expect(d!.license_type).toContain('RESTAURANT');
   });
 
-  it('falls back to inspection_date when activity_date missing', () => {
-    const d = _laNormalizeRowForTests({
-      facility_name: 'Test Restaurant',
-      inspection_date: '2026-03-01',
-    });
-    expect(d!.license_date).toBe('2026-03-01');
-  });
-
-  it('is gated behind enabled=false until resource id is verified', () => {
-    expect(losAngelesSource.enabled).toBe(false);
+  it('is enabled with live ArcGIS backing', () => {
+    expect(losAngelesSource.enabled).toBe(true);
   });
 });
 

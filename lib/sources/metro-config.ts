@@ -9,6 +9,13 @@ import type { MetroArea, MetroConfig } from './types';
 
 export const METRO_CONFIGS: readonly MetroConfig[] = [
   {
+    id: 'la',
+    label: '洛杉矶（LA County EH 餐饮检查 · ArcGIS）',
+    shortLabel: '洛杉矶',
+    cities: ['Los Angeles', 'Long Beach', 'Pasadena', 'Santa Monica', 'Glendale'],
+    openDataUrl: 'https://lacounty.gov/',
+  },
+  {
     id: 'sf_bay',
     label: '旧金山湾区（DataSF / Berkeley）',
     shortLabel: '湾区',
@@ -27,13 +34,6 @@ export const METRO_CONFIGS: readonly MetroConfig[] = [
     openDataUrl: 'https://data.sfgov.org/',
   },
   {
-    id: 'la',
-    label: '洛杉矶（LA County Public Health）',
-    shortLabel: '洛杉矶',
-    cities: ['Los Angeles', 'Long Beach', 'Pasadena', 'Santa Monica', 'Glendale'],
-    openDataUrl: 'https://data.lacounty.gov/',
-  },
-  {
     id: 'nyc',
     label: '纽约（DOHMH Restaurant Inspections）',
     shortLabel: '纽约',
@@ -49,7 +49,7 @@ export const METRO_CONFIGS: readonly MetroConfig[] = [
   },
   {
     id: 'houston',
-    label: '休斯顿（HDHHS Food Facility Inspections）',
+    label: '休斯顿（HDHHS 检查 + Planning Permit Web eReport）',
     shortLabel: '休斯顿',
     cities: ['Houston'],
     openDataUrl: 'https://data.houstontx.gov/',

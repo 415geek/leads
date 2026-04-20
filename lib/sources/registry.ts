@@ -13,6 +13,7 @@ import type { FoodDataSource, MetroArea } from './types';
 import { sanFranciscoSource } from './san-francisco';
 import { berkeleySource } from './berkeley';
 import { houstonSource } from './houston';
+import { houstonPermitEreportSource } from './houston-permit-ereport';
 import { nycSource } from './nyc';
 import { chicagoSource } from './chicago';
 import { austinSource } from './austin';
@@ -24,11 +25,12 @@ export const SOURCE_REGISTRY: readonly FoodDataSource[] = [
   sanFranciscoSource,
   berkeleySource,
   houstonSource,
+  houstonPermitEreportSource,
   nycSource, // enabled
   chicagoSource, // enabled
   austinSource, // enabled
   seattleSource, // enabled=false（待核实 resource id）
-  losAngelesSource, // enabled=false（待核实 resource id）
+  losAngelesSource,
   bostonSource, // enabled=false（待核实 resource id）
 ];
 
