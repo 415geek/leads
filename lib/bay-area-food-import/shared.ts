@@ -162,4 +162,5 @@ export type SourceFetchResult = {
   ok: boolean;
   fetched: number;
   error?: string;
+  warning?: string;
 };

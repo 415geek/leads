@@ -78,9 +78,7 @@ export const houstonSource: FoodDataSource = {
       });
     }
     const adjustedResult =
-      drafts.length !== leads.length
-        ? { ...result, fetched: drafts.length }
-        : result;
+      drafts.length !== leads.length ? { ...result, fetched: drafts.length } : { ...result };
     return { result: adjustedResult, drafts };
   },
 };

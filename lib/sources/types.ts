@@ -54,6 +54,8 @@ export interface SourceFetchResult {
   ok: boolean;
   fetched: number;
   error?: string;
+  /** 非致命提示（如数据源在门户侧长期未更新） */
+  warning?: string;
 }
 
 export interface FetchOptions {

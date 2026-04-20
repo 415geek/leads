@@ -10,11 +10,30 @@ import {
 
 /** City of Houston CKAN — HDHHS「最近一次设施检查」Datastore（食品服务相关业态） */
 const HOUSTON_CKN_BASE = 'https://data.houstontx.gov/api/3/action/datastore_search_sql';
-/** resource: Last Facility Inspection Inspections as of 5-12-2015（字段含 FACILITY TYPE / 地址等） */
+/** 默认 resource：Last Facility Inspection as of 2015-05-12（门户侧长期未刷新时可设 HOUSTON_HDHHS_DATASTORE_RESOURCE_ID） */
 export const HOUSTON_LAST_INSPECTION_RESOURCE =
   '1587d382-4eb4-441f-a77a-d2eef9d7b208';
 
-const HOUSTON_IMPORT_LIMIT = 300;
+const HOUSTON_IMPORT_LIMIT_DEFAULT = 300;
+
+function houstonHdhhsDatastoreResourceId(): string {
+  const id = process.env.HOUSTON_HDHHS_DATASTORE_RESOURCE_ID?.trim();
+  return id?.length ? id : HOUSTON_LAST_INSPECTION_RESOURCE;
+}
+
+function houstonImportLimit(): number {
+  const raw = process.env.HOUSTON_HDHHS_IMPORT_LIMIT?.trim();
+  if (!raw) return HOUSTON_IMPORT_LIMIT_DEFAULT;
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n)) return HOUSTON_IMPORT_LIMIT_DEFAULT;
+  return Math.min(5000, Math.max(50, n));
+}
+
+function maxIsoDate(dates: readonly (string | null)[]): string | null {
+  const xs = dates.filter((d): d is string => !!d && /^\d{4}-\d{2}-\d{2}$/.test(d));
+  if (!xs.length) return null;
+  return xs.reduce((a, b) => (a > b ? a : b));
+}
 
 function foodFacilitySqlWhere(): string {
   const f = 'FACILITY TYPE';
@@ -71,11 +90,14 @@ export async function fetchHoustonFoodLeads(): Promise<{
   const label =
     'Houston data.houstontx.gov · HDHHS Last Facility Inspection（CKAN datastore SQL）';
 
+  const resourceId = houstonHdhhsDatastoreResourceId();
+  const limit = houstonImportLimit();
+
   const sql = `
-    SELECT * FROM "${HOUSTON_LAST_INSPECTION_RESOURCE}"
+    SELECT * FROM "${resourceId}"
     WHERE ${foodFacilitySqlWhere()}
     ORDER BY "INSPECTION DATE" DESC NULLS LAST
-    LIMIT ${HOUSTON_IMPORT_LIMIT}
+    LIMIT ${limit}
   `
     .replace(/\s+/g, ' ')
     .trim();
@@ -149,8 +171,20 @@ export async function fetchHoustonFoodLeads(): Promise<{
       });
     }
 
+    const maxLeadDate = maxIsoDate(leads.map((l) => l.license_date));
+    const stalePortalWarning =
+      maxLeadDate && maxLeadDate < '2020-01-01'
+        ? `HDHHS CKAN 检查日期最新为 ${maxLeadDate}（data.houstontx.gov 该 datastore 未更新至近年）。近年工商实体请配置 HARRIS_DBA_JSON_URL / TX_SOS_HOUSTON_JSON_URL；若门户发布新 resource，可设置 HOUSTON_HDHHS_DATASTORE_RESOURCE_ID。`
+        : undefined;
+
     return {
-      result: { id, label, ok: true, fetched: leads.length },
+      result: {
+        id,
+        label,
+        ok: true,
+        fetched: leads.length,
+        ...(stalePortalWarning ? { warning: stalePortalWarning } : {}),
+      },
       leads,
     };
   } catch (e) {
