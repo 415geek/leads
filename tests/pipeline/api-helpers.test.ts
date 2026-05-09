@@ -68,6 +68,10 @@ describe('dedupePipelineLeads', () => {
       lead_score: 50,
       is_restaurant_confidence: null,
       ai_classification: null,
+      source_count: 1,
+      source_ids: ['sf_gov'],
+      is_chain: false,
+      chain_name: null,
       ...overrides,
     };
   }

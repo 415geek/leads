@@ -18,7 +18,14 @@ export type MetroArea =
   | 'houston'
   | 'seattle'
   | 'austin'
-  | 'boston';
+  | 'boston'
+  // New metros added in V2 Pro (gated on data-availability spike)
+  | 'las_vegas'
+  | 'miami'
+  | 'dallas'
+  | 'phoenix'
+  | 'denver'
+  | 'atlanta';
 
 /** 数据源类型：影响 first_inspection_date 推断逻辑 */
 export type SourceKind = 'permit' | 'inspection' | 'registration';

@@ -1,39 +1,40 @@
 /**
- * Pipeline Orchestrator —— 全美新餐饮情报层
+ * Pipeline Orchestrator — V2 Pro (7-step)
  *
- * 数据流：
+ *   SOURCE_REGISTRY (14+ metros, 20+ sources)
+ *       │
+ *       ▼ ingest() — parallel, error-isolated per source (Promise.allSettled)
+ *   NormalizedDraft[]
+ *       │
+ *       ▼ classify() — Claude Haiku, 20-batch, 24h cache
+ *         is_restaurant=true AND confidence > 0.6 → continue
+ *       │
+ *       ▼ cross_validate() — ZIP-code blocking, token-set-ratio ≥ 85
+ *         → source_count, source_ids, multi_source_bonus in scoreV3
+ *       │
+ *       ▼ chain_detect() — 500-entry blocklist, fuzzy match ≥ 85
+ *         → is_chain, chain_name; -15 penalty in scoreV3
+ *       │
+ *       ▼ enrich() — Google Places, 90d cache, daily cap=3000
+ *       │
+ *       ▼ scoreV3() — 7 factors, Math.max(0, Math.min(100, raw))
+ *       │
+ *       ▼ upsert → Supabase leads + lead_enrichment
  *
- *   ┌─────────────────────────────────────────────────────────────┐
- *   │ SOURCE_REGISTRY                                              │
- *   │   SF(DataSF) · Berkeley · Houston · NYC · LA · Chicago ...   │
- *   └────────────────────┬────────────────────────────────────────┘
- *                        │ ingest() 并发拉取（每源独立错误隔离）
- *                        ▼
- *   ┌─────────────────────────────────────────────────────────────┐
- *   │ NormalizedDraft[]  （统一 schema：external_id / metro ... ） │
- *   └────────────────────┬────────────────────────────────────────┘
- *                        │ classify()  Phase 2 接入 Claude Haiku
- *                        ▼
- *   ┌─────────────────────────────────────────────────────────────┐
- *   │ is_restaurant=true  AND  confidence > 0.6  才继续下一步       │
- *   └────────────────────┬────────────────────────────────────────┘
- *                        │ enrich()  Phase 2 接入 Google Places + 缓存 + 预算闸门
- *                        ▼
- *   ┌─────────────────────────────────────────────────────────────┐
- *   │ score()  scoreV2：freshness + AI conf + enrichment + phone   │
- *   └────────────────────┬────────────────────────────────────────┘
- *                        │ upsert (source, external_id) 主键
- *                        ▼
- *                    Supabase leads + lead_enrichment
- *
- * 关键不变量：
- *   - 一源失败不拖累其他（Promise.allSettled）
- *   - classify=false 的 draft 在 Phase 2 启用后**不会**触发 Google Places 调用（成本闸门）
- *   - Phase 1 时 classify/enrich 是 pass-through（透传），行为与旧 pipeline 一致
+ * Invariants:
+ *   - One source failure never blocks others (Promise.allSettled)
+ *   - classify=false drafts never reach Google Places (cost gate)
+ *   - cross_validate crash → draft passes through with source_count=1 (non-blocking)
+ *   - chain_detect crash → is_chain=false for all (non-blocking)
+ *   - Phase 1: classify/enrich are pass-throughs (no API keys required)
  */
 
 import { ingestAll } from './ingest';
 import { classifyDrafts } from './classify';
+import type { ClassifiedDraft } from './classify';
+import { crossValidateDrafts } from './cross-validate';
+import type { CrossValidatedDraft } from './cross-validate';
+import { detectChains } from './chain-detect';
 import { enrichDrafts } from './enrich';
 import { scoreDraft } from './score';
 import type { FoodDataSource, NormalizedDraft, SourceFetchResult } from '@/lib/sources/types';
@@ -43,39 +44,35 @@ export interface PipelineLead extends NormalizedDraft {
   lead_score: number;
   is_restaurant_confidence: number | null;
   ai_classification: Record<string, unknown> | null;
+  source_count: number;
+  source_ids: string[];
+  is_chain: boolean;
+  chain_name: string | null;
 }
 
 export interface PipelineRunResult {
   sinceDate: string;
   sourceResults: SourceFetchResult[];
   leads: PipelineLead[];
-  /** 被 AI 分类器判为非餐厅而丢弃的条数 */
   droppedNonRestaurant: number;
-  /** 本次 enrichment 实际调用 Google Places 的次数（成本观测） */
   enrichmentCalls: number;
+  chainsDetected: number;
+  crossValidated: number;
 }
 
 export interface PipelineOptions {
-  /** 只跑指定源；为空 → 跑 registry 里所有 enabled 源 */
   sourceIds?: string[];
-  /** 语法糖：只跑一个源 —— 等价于 sourceIds: [id]，让调用点更清晰 */
   singleSourceId?: string;
-  /** lookback 天数；默认 30 */
   lookbackDays?: number;
-  /**
-   * skipClassify/skipEnrich：
-   *   - 交互式 import 默认 true（跳过，避免 Vercel 函数超时；AI 留给后续 reclassify 任务）
-   *   - cron 或 /reclassify 路径可显式设为 false
-   */
   skipClassify?: boolean;
   skipEnrich?: boolean;
+  skipCrossValidate?: boolean;
+  skipChainDetect?: boolean;
 }
 
 function selectSources(opts: PipelineOptions): readonly FoodDataSource[] {
   const all = enabledSources();
-  const ids: string[] | undefined = opts.singleSourceId
-    ? [opts.singleSourceId]
-    : opts.sourceIds;
+  const ids = opts.singleSourceId ? [opts.singleSourceId] : opts.sourceIds;
   if (!ids?.length) return all;
   return all.filter((s) => ids.includes(s.id));
 }
@@ -86,6 +83,10 @@ function computeSinceDate(lookbackDays: number): string {
   return d.toISOString().split('T')[0];
 }
 
+function passThruCrossValidate(drafts: ClassifiedDraft[]): CrossValidatedDraft[] {
+  return drafts.map((c) => ({ ...c, source_count: 1, source_ids: [c.draft.source] }));
+}
+
 export async function runPipeline(
   opts: PipelineOptions = {},
 ): Promise<PipelineRunResult> {
@@ -93,36 +94,77 @@ export async function runPipeline(
   const defaultLookback = opts.lookbackDays ?? 30;
   const sinceDate = computeSinceDate(defaultLookback);
 
-  // 1. ingest —— 并发拉取，错误隔离（每源可用 lookbackDays 覆盖默认）
-  const { sourceResults, drafts } = await ingestAll(sources, {
-    lookbackDays: defaultLookback,
-  });
+  // 1. Ingest — concurrent, error-isolated
+  const { sourceResults, drafts } = await ingestAll(sources, { lookbackDays: defaultLookback });
 
-  // 2. classify —— Phase 1 pass-through；Phase 2 接 Claude Haiku
-  const classified = opts.skipClassify
+  // 2. Classify
+  const classified: ClassifiedDraft[] = opts.skipClassify
     ? drafts.map((d) => ({ draft: d, is_restaurant: true as const, confidence: null, raw: null }))
     : await classifyDrafts(drafts);
 
   const kept = classified.filter((c) => c.is_restaurant);
   const dropped = classified.length - kept.length;
 
-  // 3. enrich —— Phase 1 pass-through；Phase 2 接 Google Places（只对 kept 调用，是成本闸门）
+  // 3. Cross-validate
+  let crossValidatedDrafts: CrossValidatedDraft[];
+  let crossValidationStats = 0;
+  if (!opts.skipCrossValidate) {
+    try {
+      const cv = crossValidateDrafts(kept);
+      crossValidationStats = cv.filter((d) => d.source_count >= 2).length;
+      crossValidatedDrafts = cv;
+    } catch (err) {
+      console.warn('[pipeline] cross-validate failed, skipping:', err);
+      crossValidatedDrafts = passThruCrossValidate(kept);
+    }
+  } else {
+    crossValidatedDrafts = passThruCrossValidate(kept);
+  }
+
+  // 4. Chain detect
+  let chainDetectedDrafts: CrossValidatedDraft[];
+  let chainsCount = 0;
+  if (!opts.skipChainDetect) {
+    try {
+      const cd = detectChains(crossValidatedDrafts);
+      chainsCount = cd.filter((d) => d.is_chain).length;
+      chainDetectedDrafts = cd;
+    } catch (err) {
+      console.warn('[pipeline] chain-detect failed, skipping:', err);
+      chainDetectedDrafts = crossValidatedDrafts.map((c) => ({
+        ...c,
+        is_chain: false,
+        chain_name: null,
+      }));
+    }
+  } else {
+    chainDetectedDrafts = crossValidatedDrafts.map((c) => ({
+      ...c,
+      is_chain: false,
+      chain_name: null,
+    }));
+  }
+
+  // 5. Enrich
   const enriched = opts.skipEnrich
-    ? kept.map((c) => ({ ...c, enrichment: null }))
-    : await enrichDrafts(kept);
+    ? chainDetectedDrafts.map((c) => ({ ...c, enrichment: null }))
+    : await enrichDrafts(chainDetectedDrafts);
 
   const enrichmentCalls = enriched.filter((e) => e.enrichment?.fetched).length;
 
-  // 4. score
+  // 6. ScoreV3 + assemble PipelineLead
   const leads: PipelineLead[] = enriched.map((e) => {
+    const c = e as typeof e & {
+      source_count?: number;
+      source_ids?: string[];
+      is_chain?: boolean;
+      chain_name?: string | null;
+    };
+
     const cls = (e.raw as Record<string, unknown> | null) ?? null;
     const mergedCls: Record<string, unknown> = { ...(cls ?? {}) };
-    if (e.draft.opening_signals) {
-      mergedCls.datasf_opening = e.draft.opening_signals;
-    }
-    if (e.draft.houston_opening) {
-      mergedCls.houston_opening = e.draft.houston_opening;
-    }
+    if (e.draft.opening_signals) mergedCls.datasf_opening = e.draft.opening_signals;
+    if (e.draft.houston_opening) mergedCls.houston_opening = e.draft.houston_opening;
     if (
       e.draft.houston_opening?.display_status === 'pre-opening' &&
       e.enrichment?.business_status === 'OPERATIONAL'
@@ -132,6 +174,12 @@ export async function runPipeline(
         google_business_status: e.enrichment.business_status,
       };
     }
+    if (c.is_chain) mergedCls.chain_name = c.chain_name;
+
+    const source_count = c.source_count ?? 1;
+    const source_ids = c.source_ids ?? [e.draft.source];
+    const is_chain = c.is_chain ?? false;
+    const chain_name = c.chain_name ?? null;
     const ai_classification = Object.keys(mergedCls).length ? mergedCls : null;
 
     return {
@@ -139,10 +187,16 @@ export async function runPipeline(
       phone: e.enrichment?.formatted_phone ?? e.draft.phone,
       is_restaurant_confidence: e.confidence,
       ai_classification,
+      source_count,
+      source_ids,
+      is_chain,
+      chain_name,
       lead_score: scoreDraft({
         draft: e.draft,
         confidence: e.confidence,
         hasEnrichment: !!e.enrichment && e.enrichment.business_status === 'OPERATIONAL',
+        source_count,
+        is_chain,
       }),
     };
   });
@@ -153,5 +207,7 @@ export async function runPipeline(
     leads,
     droppedNonRestaurant: dropped,
     enrichmentCalls,
+    chainsDetected: chainsCount,
+    crossValidated: crossValidationStats,
   };
 }

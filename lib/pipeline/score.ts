@@ -1,92 +1,138 @@
 /**
- * scoreV2 —— 全美情报层升级版评分（0..100）
+ * scoreV3 — 7-factor lead scoring (0..100, capped)
  *
- * 输入权重：
- *   40 × freshness(first_inspection_date OR license_date)
- *     ≤7 天=1.0, ≤14=0.875, ≤30=0.75, ≤60=0.5, ≤90=0.25, 其他=0
- *   25 × ai_classification_confidence    // Phase 1 pass-through 时 confidence=null → 记 0.8 作基准
- *   15 × metro_weight                     // sf_bay/nyc/la=1.0, houston/chicago/boston/seattle/austin=0.67
- *   10 × has_enrichment                   // Google 命中且 OPERATIONAL
- *   10 × has_phone                        // 有联系电话
+ * Factor             Weight     Notes
+ * ─────────────────  ─────────  ──────────────────────────────────────────────
+ * freshness          0-40       ≤7d=40, ≤14d=35, ≤30d=30, ≤60d=20, ≤90d=10, >90d=0
+ * AI confidence      0-20       conf * 20; null (Phase 1) → 0.8 * 20 = 16
+ * metro weight       0-12       Tier1=12, Tier2=8, Tier3=5, unknown=3
+ * enrichment         0-8        OPERATIONAL=8; otherwise 0
+ * phone              0-5        has phone=5
+ * multi-source bonus 0/15/25    source_count=2 → +15; ≥3 → +25
+ * opening signal     -10/0/6/10 confirmed_new=+10, likely_new=+6, possible/null=0, weak=-10
+ * chain penalty      0/-15      is_chain=true → -15
+ * ─────────────────
+ * MAX RAW            ~135 → Math.max(0, Math.min(100, raw))
  *
- * 与旧 lib/scoring.ts 的对比：
- *   - 不再加"中餐 +30"硬分：菜系是筛选维度，不进评分
- *   - 用 first_inspection_date 兜底 license_date：inspection 类数据源常常没有 license_date
- *   - confidence=null（Phase 1）给基准 0.8，避免 Phase 1 阶段评分整体塌陷
+ * Upgrade from scoreV2:
+ *   - metro weights changed: old 0-15 range → new 0-12 (Tier1/2/3 table)
+ *   - enrichment/phone weights reduced to make room for multi-source + chain
+ *   - opening_signals generalized beyond sf_gov to all adapters
+ *   - chain penalty new
+ *   - multi-source bonus new
+ *   - NaN guards on all inputs (type-safe defaults)
  */
 
 import type { MetroArea, NormalizedDraft } from '@/lib/sources/types';
 
-const METRO_WEIGHT: Record<MetroArea, number> = {
-  sf_bay: 1.0,
-  nyc: 1.0,
-  la: 1.0,
-  houston: 0.67,
-  chicago: 0.67,
-  boston: 0.67,
-  seattle: 0.67,
-  austin: 0.67,
-};
+// ─── Metro weight tiers ────────────────────────────────────────────────────
+
+const TIER1: MetroArea[] = ['sf_bay', 'nyc', 'la'];
+const TIER2: MetroArea[] = ['houston', 'chicago', 'dallas', 'miami', 'las_vegas'];
+// Tier 3: all others (austin, seattle, boston, phoenix, denver, atlanta, unknown)
+
+function metroWeight(metro: MetroArea | string): number {
+  if ((TIER1 as string[]).includes(metro)) return 12;
+  if ((TIER2 as string[]).includes(metro)) return 8;
+  return 5;
+}
+
+// ─── Freshness ────────────────────────────────────────────────────────────
 
 function freshnessFactor(dateStr: string | null): number {
   if (!dateStr) return 0;
   const d = new Date(dateStr);
   if (Number.isNaN(d.getTime())) return 0;
   const days = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
-  if (days < 0) return 1.0; // 未来日期（数据源错误）：当作最新
-  if (days <= 7) return 1.0;
-  if (days <= 14) return 0.875;
-  if (days <= 30) return 0.75;
-  if (days <= 60) return 0.5;
-  if (days <= 90) return 0.25;
+  if (days < 0) return 40; // Future date from data source — treat as brand new
+  if (days <= 7) return 40;
+  if (days <= 14) return 35;
+  if (days <= 30) return 30;
+  if (days <= 60) return 20;
+  if (days <= 90) return 10;
   return 0;
 }
 
-export interface ScoreInput {
-  draft: NormalizedDraft;
-  /** AI 分类器置信度；null = Phase 1 pass-through，给 0.8 基准；0..1 = Phase 2 真实值 */
-  confidence: number | null;
-  /** Google Places 命中且 OPERATIONAL */
-  hasEnrichment: boolean;
-}
+// ─── Opening signal bonus (generalized — works for all adapters) ───────────
 
-function datasfOpeningBonus(draft: NormalizedDraft): number {
-  if (draft.source !== 'sf_gov' || !draft.opening_signals) return 0;
-  switch (draft.opening_signals.new_opening_label) {
+type OpeningLabel =
+  | 'confirmed_new_opening'
+  | 'likely_new_opening'
+  | 'possible_new_opening'
+  | 'weak_signal';
+
+function openingSignalBonus(draft: NormalizedDraft): number {
+  const signals = draft.opening_signals ?? draft.houston_opening;
+  if (!signals) return 0;
+
+  const label =
+    (signals as { new_opening_label?: OpeningLabel }).new_opening_label ??
+    (signals as { display_status?: string }).display_status;
+
+  switch (label) {
     case 'confirmed_new_opening':
+    case 'confirmed':
       return 10;
     case 'likely_new_opening':
+    case 'pre-opening':
       return 6;
     case 'possible_new_opening':
+    case 'possible':
       return 0;
     case 'weak_signal':
+    case 'weak':
       return -10;
     default:
       return 0;
   }
 }
 
+// ─── Score input ──────────────────────────────────────────────────────────
+
+export interface ScoreInput {
+  draft: NormalizedDraft;
+  /** AI confidence 0..1; null = Phase 1 pass-through (uses 0.8 baseline) */
+  confidence: number | null;
+  /** Google Places returned OPERATIONAL status */
+  hasEnrichment: boolean;
+  /** From cross-validation step; defaults to 1 if not provided */
+  source_count?: number;
+  /** From chain-detect step; defaults to false if not provided */
+  is_chain?: boolean;
+}
+
 export function scoreDraft(input: ScoreInput): number {
   const { draft, confidence, hasEnrichment } = input;
+
+  // NaN guards — type-safe defaults prevent silent wrong scores
+  const source_count =
+    typeof input.source_count === 'number' && input.source_count >= 1
+      ? input.source_count
+      : 1;
+  const is_chain = input.is_chain === true;
 
   const freshDate = draft.first_inspection_date ?? draft.license_date;
   const fresh = freshnessFactor(freshDate);
 
-  // Phase 1 pass-through：confidence=null 记 0.8 基准；Phase 2 真实值
-  const conf = confidence ?? 0.8;
+  // Phase 1: null → 0.8 baseline; Phase 2: clamp to [0,1]
+  const conf = confidence === null ? 0.8 : Math.max(0, Math.min(1, confidence));
 
-  const metroW = METRO_WEIGHT[draft.metro_area] ?? 0.5;
-
+  const metro = metroWeight(draft.metro_area);
   const hasPhone = !!draft.phone;
 
-  const base =
-    40 * fresh +
-    25 * Math.max(0, Math.min(1, conf)) +
-    15 * metroW +
-    (hasEnrichment ? 10 : 0) +
-    (hasPhone ? 10 : 0);
+  const multiSourceBonus = source_count >= 3 ? 25 : source_count === 2 ? 15 : 0;
+  const openingBonus = openingSignalBonus(draft);
+  const penalty = is_chain ? -15 : 0;
 
-  const score = base + datasfOpeningBonus(draft);
+  const raw =
+    fresh +
+    conf * 20 +
+    metro +
+    (hasEnrichment ? 8 : 0) +
+    (hasPhone ? 5 : 0) +
+    multiSourceBonus +
+    openingBonus +
+    penalty;
 
-  return Math.round(Math.max(0, Math.min(100, score)));
+  return Math.round(Math.max(0, Math.min(100, raw)));
 }

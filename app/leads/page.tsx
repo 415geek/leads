@@ -22,6 +22,8 @@ import { Button } from '@/components/ui/button';
 import { Lead, LeadStatus } from '@/types/lead';
 import { ScoreBadge } from '@/components/score-badge';
 import { StatusBadge } from '@/components/status-badge';
+import { ChainBadge } from '@/components/chain-badge';
+import { SourceCountBadge } from '@/components/source-count-badge';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { dashboardBusinessSearchHref } from '@/lib/dashboard-business-search';
@@ -32,17 +34,20 @@ import {
   type LeadRegionFilterId,
 } from '@/lib/region-config';
 import { METRO_CONFIGS } from '@/lib/sources/metro-config';
-
-const STATUS_OPTIONS: { value: LeadStatus | 'all'; label: string }[] = [
-  { value: 'all', label: '全部状态' },
-  { value: 'new', label: '新线索' },
-  { value: 'contacted', label: '已联系' },
-  { value: 'in_progress', label: '跟进中' },
-  { value: 'converted', label: '已成交' },
-  { value: 'not_interested', label: '无意向' },
-];
+import { useTranslations } from '@/lib/i18n';
 
 export default function LeadsPage() {
+  const { t } = useTranslations();
+
+  const STATUS_OPTIONS: { value: LeadStatus | 'all'; label: string }[] = [
+    { value: 'all', label: t.status_all },
+    { value: 'new', label: t.status_new },
+    { value: 'contacted', label: t.status_contacted },
+    { value: 'in_progress', label: t.status_in_progress },
+    { value: 'converted', label: t.status_converted },
+    { value: 'not_interested', label: t.status_not_interested },
+  ];
+
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
@@ -55,13 +60,16 @@ export default function LeadsPage() {
     (REGION_OPTIONS[0]?.id ?? 'sf_bay') as LeadRegionFilterId,
   );
   const [chineseOnly, setChineseOnly] = useState(false);
+  const [hideChains, setHideChains] = useState(false);
   const [minConfidence, setMinConfidence] = useState<string>('all');
   const regionHydrated = useRef(false);
 
   const importLabel =
     region === 'all'
-      ? '导入全部启用城市'
-      : `从${METRO_CONFIGS.find((m) => m.id === region)?.shortLabel ?? region}开放数据导入`;
+      ? t.import_all
+      : t.lang_toggle === 'EN'
+        ? `Import from ${METRO_CONFIGS.find((m) => m.id === region)?.shortLabel ?? region} Open Data`
+        : `从${METRO_CONFIGS.find((m) => m.id === region)?.shortLabel ?? region}开放数据导入`;
 
   const [importProgress, setImportProgress] = useState<{ done: number; total: number; current?: string } | null>(null);
 
@@ -188,6 +196,7 @@ export default function LeadsPage() {
       if (city !== 'all') params.append('city', city);
       if (region !== 'all') params.append('region', region);
       if (chineseOnly) params.append('chinese_only', '1');
+      if (hideChains) params.append('hide_chains', '1');
       if (minConfidence !== 'all') params.append('min_confidence', minConfidence);
 
       const response = await fetch(`/api/leads?${params}`);
@@ -200,7 +209,7 @@ export default function LeadsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, status, city, region, chineseOnly, minConfidence]);
+  }, [page, search, status, city, region, chineseOnly, hideChains, minConfidence]);
 
   useEffect(() => {
     try {
@@ -231,7 +240,7 @@ export default function LeadsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, status, city, region, chineseOnly, minConfidence]);
+  }, [search, status, city, region, chineseOnly, hideChains, minConfidence]);
 
   useEffect(() => {
     setCity('all');
@@ -306,7 +315,7 @@ export default function LeadsPage() {
             </Select>
 
             <Input
-              placeholder="搜索餐厅名或地址..."
+              placeholder={t.search_placeholder}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full sm:w-64"
@@ -359,6 +368,16 @@ export default function LeadsPage() {
               />
               只看中餐
             </label>
+
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={hideChains}
+                onChange={(e) => setHideChains(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              隐藏连锁品牌
+            </label>
             </div>
           </div>
         </CardContent>
@@ -372,7 +391,7 @@ export default function LeadsPage() {
             </div>
           ) : leads.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
-              暂无符合条件的 leads
+              {t.no_leads}
             </div>
           ) : (
             <>
@@ -392,6 +411,8 @@ export default function LeadsPage() {
                       <div className="flex flex-wrap items-center gap-2 sm:flex-col sm:items-end sm:shrink-0">
                         <ScoreBadge score={lead.lead_score} />
                         <StatusBadge status={lead.lead_status} />
+                        <ChainBadge isChain={lead.is_chain} chainName={lead.chain_name} />
+                        <SourceCountBadge sourceCount={lead.source_count} sourceIds={lead.source_ids} />
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">
@@ -438,19 +459,25 @@ export default function LeadsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>餐厅名</TableHead>
-                      <TableHead>地址</TableHead>
-                      <TableHead>菜系</TableHead>
-                      <TableHead>评分</TableHead>
-                      <TableHead>状态</TableHead>
-                      <TableHead>开发信</TableHead>
-                      <TableHead className="text-right">操作</TableHead>
+                      <TableHead>{t.col_restaurant}</TableHead>
+                      <TableHead>{t.col_city}</TableHead>
+                      <TableHead>{t.col_source}</TableHead>
+                      <TableHead>{t.col_score}</TableHead>
+                      <TableHead>{t.col_status}</TableHead>
+                      <TableHead>{t.generate_message}</TableHead>
+                      <TableHead className="text-right">{t.col_actions}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {leads.map((lead) => (
                       <TableRow key={lead.id}>
-                        <TableCell className="font-medium">{lead.name}</TableCell>
+                        <TableCell className="font-medium">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span>{lead.name}</span>
+                            <ChainBadge isChain={lead.is_chain} chainName={lead.chain_name} />
+                            <SourceCountBadge sourceCount={lead.source_count} sourceIds={lead.source_ids} />
+                          </div>
+                        </TableCell>
                         <TableCell className="text-gray-500 max-w-xs truncate">
                           {lead.address || '-'}
                         </TableCell>
@@ -503,10 +530,10 @@ export default function LeadsPage() {
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
           >
-            上一页
+            {t.prev_page}
           </Button>
           <span className="text-sm text-gray-500">
-            第 {page} 页，共 {totalPages} 页
+            {t.page_info(page, totalPages)}
           </span>
           <Button
             variant="outline"
@@ -514,7 +541,7 @@ export default function LeadsPage() {
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
           >
-            下一页
+            {t.next_page}
           </Button>
         </div>
       )}

@@ -2,7 +2,8 @@
  * Seattle / LA / Boston adapters —— 骨架测试
  *
  * LA：已切换为 LA County ArcGIS FeatureServer（现行季度数据）；normalize 以字段名为准。
- * Seattle / Boston 仍默认 enabled=false（待核实 resource）。
+ * Seattle：enabled=true (resource id f29f-zza5 verified 2026-05-09)
+ * Boston：enabled=true (resource id 4582bec6 verified 2026-05-09); date field is resultdttm.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -32,8 +33,8 @@ describe('Seattle (King County) adapter', () => {
     expect(d!.city).toBe('Seattle');
   });
 
-  it('is gated behind enabled=false until resource id is verified', () => {
-    expect(seattleSource.enabled).toBe(false);
+  it('is enabled (resource id f29f-zza5 verified 2026-05-09)', () => {
+    expect(seattleSource.enabled).toBe(true);
   });
 });
 
@@ -64,15 +65,16 @@ describe('LA County EH (ArcGIS) adapter', () => {
 });
 
 describe('Boston Food Establishment adapter (CKAN)', () => {
-  it('uses licenseno as external_id, inspdttm as date', () => {
+  it('uses licenseno as external_id, resultdttm as inspection date', () => {
     const d = _bostonNormalizeRowForTests({
       businessname: 'Union Oyster House',
       address: '41 Union St',
       city: 'Boston',
       licenseno: 'LIC-789',
-      inspdttm: '2026-03-08',
+      resultdttm: '2026-03-08',
     });
     expect(d!.external_id).toBe('LIC-789');
+    expect(d!.license_date).toBe('2026-03-08');
     expect(d!.metro_area).toBe('boston');
     expect(d!.source).toBe('boston_food_inspect');
   });
@@ -82,7 +84,7 @@ describe('Boston Food Establishment adapter (CKAN)', () => {
     expect(d).toBeNull();
   });
 
-  it('is gated behind enabled=false until resource id is verified', () => {
-    expect(bostonSource.enabled).toBe(false);
+  it('is enabled (resource id 4582bec6 verified 2026-05-09)', () => {
+    expect(bostonSource.enabled).toBe(true);
   });
 });

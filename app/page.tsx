@@ -9,22 +9,28 @@ import { StatusBadge } from '@/components/status-badge';
 import Link from 'next/link';
 import { BusinessSearchPanel } from '@/components/business-search-panel';
 import { dashboardBusinessSearchHref } from '@/lib/dashboard-business-search';
+import { useTranslations } from '@/lib/i18n';
+
+function MapLoadingCard() {
+  const { t } = useTranslations();
+  return (
+    <Card className="border-[#1e3a5f]/20">
+      <CardHeader>
+        <CardTitle className="text-lg text-[#1e3a5f]">{t.section_map}</CardTitle>
+        <p className="text-sm text-muted-foreground">{t.map_loading}</p>
+      </CardHeader>
+      <CardContent>
+        <div className="h-[min(420px,55vh)] w-full animate-pulse rounded-lg bg-slate-100" />
+      </CardContent>
+    </Card>
+  );
+}
 
 const LeadsMapPanel = dynamic(
   () => import('@/components/leads-map-panel').then((m) => ({ default: m.LeadsMapPanel })),
   {
     ssr: false,
-    loading: () => (
-      <Card className="border-[#1e3a5f]/20">
-        <CardHeader>
-          <CardTitle className="text-lg text-[#1e3a5f]">Leads 地图</CardTitle>
-          <p className="text-sm text-muted-foreground">地图加载中…</p>
-        </CardHeader>
-        <CardContent>
-          <div className="h-[min(420px,55vh)] w-full animate-pulse rounded-lg bg-slate-100" />
-        </CardContent>
-      </Card>
-    ),
+    loading: () => <MapLoadingCard />,
   }
 );
 
@@ -37,6 +43,7 @@ interface Stats {
 }
 
 export default function Dashboard() {
+  const { t } = useTranslations();
   const [stats, setStats] = useState<Stats | null>(null);
   const [recentLeads, setRecentLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,7 +92,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-[#1e3a5f]">Dashboard</h2>
+      <h2 className="text-2xl font-bold text-[#1e3a5f]">{t.dashboard_title}</h2>
 
       <BusinessSearchPanel />
 
@@ -93,7 +100,7 @@ export default function Dashboard() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-gray-500">
-              总 Leads
+              {t.stat_total}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -102,11 +109,11 @@ export default function Dashboard() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-gray-500">
-              本周新增
+              {t.stat_new_this_week}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -115,11 +122,11 @@ export default function Dashboard() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-gray-500">
-              热门 Leads (80+分)
+              {t.stat_hot_leads}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -128,11 +135,11 @@ export default function Dashboard() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-gray-500">
-              已成交
+              {t.stat_converted}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -147,12 +154,12 @@ export default function Dashboard() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">最新 Leads</CardTitle>
+          <CardTitle className="text-lg">{t.section_recent}</CardTitle>
         </CardHeader>
         <CardContent>
           {recentLeads.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              暂无数据。请通过 n8n 导入 leads 或手动添加。
+              {t.empty_state}
             </div>
           ) : (
             <div className="space-y-3">
@@ -172,7 +179,7 @@ export default function Dashboard() {
                       href={dashboardBusinessSearchHref(lead.name, lead.city)}
                       className="text-xs font-medium text-[#1e3a5f] underline underline-offset-2 hover:text-amber-700"
                     >
-                      商业搜索
+                      {t.business_search}
                     </Link>
                     <ScoreBadge score={lead.lead_score} />
                     <StatusBadge status={lead.lead_status} />
@@ -181,13 +188,13 @@ export default function Dashboard() {
               ))}
             </div>
           )}
-          
+
           <div className="mt-4 text-center">
-            <Link 
-              href="/leads" 
+            <Link
+              href="/leads"
               className="text-[#1e3a5f] hover:text-[#f59e0b] font-medium"
             >
-              查看全部 →
+              {t.view_all}
             </Link>
           </div>
         </CardContent>

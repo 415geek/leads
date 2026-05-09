@@ -3,6 +3,9 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { LogoutButton } from "@/components/logout-button";
+import { LanguageProvider } from "@/components/language-provider";
+import { LanguageToggle } from "@/components/language-toggle";
+import { NavLinks } from "@/components/nav-links";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -22,27 +25,25 @@ export default function RootLayout({
   return (
     <html lang="zh-CN" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-slate-50">
-        <header className="bg-[#1e3a5f] text-white py-4 px-6 shadow-md">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <h1 className="text-xl font-bold">
-              <span className="text-[#f59e0b]">Restaurant</span>
-              <span> Leads Finder</span>
-            </h1>
-            <nav className="flex items-center gap-4">
-              <a href="/" className="hover:text-[#f59e0b] transition-colors">
-                Dashboard
-              </a>
-              <a href="/leads" className="hover:text-[#f59e0b] transition-colors">
-                Leads
-              </a>
-              <LogoutButton />
-            </nav>
-          </div>
-        </header>
-        <main className="flex-1 max-w-7xl mx-auto w-full py-6 px-4">
-          {children}
-        </main>
-        <Toaster />
+        <LanguageProvider>
+          <header className="bg-[#1e3a5f] text-white py-4 px-6 shadow-md">
+            <div className="max-w-7xl mx-auto flex items-center justify-between">
+              <h1 className="text-xl font-bold">
+                <span className="text-[#f59e0b]">Restaurant</span>
+                <span> Leads Finder</span>
+              </h1>
+              <nav className="flex items-center gap-3">
+                <NavLinks />
+                <LanguageToggle />
+                <LogoutButton />
+              </nav>
+            </div>
+          </header>
+          <main className="flex-1 max-w-7xl mx-auto w-full py-6 px-4">
+            {children}
+          </main>
+          <Toaster />
+        </LanguageProvider>
       </body>
     </html>
   );

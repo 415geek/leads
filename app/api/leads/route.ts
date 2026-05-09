@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
     const minScore = searchParams.get('min_score');
     const minConfidenceRaw = searchParams.get('min_confidence');
     const chineseOnly = searchParams.get('chinese_only');
+    const hideChains = searchParams.get('hide_chains');
     const search = searchParams.get('search');
     const sortBy = searchParams.get('sort') || 'lead_score';
     const sortOrder = searchParams.get('order') || 'desc';
@@ -57,6 +58,9 @@ export async function GET(request: NextRequest) {
     if (chineseOnly === '1' || chineseOnly === 'true') {
       // 中餐标签集合与 lib/bay-area-food-import/index.ts 一致
       query = query.in('cuisine_type', ['中餐', '川菜', '粤菜', '湘菜', '台湾菜', '东北菜']);
+    }
+    if (hideChains === '1' || hideChains === 'true') {
+      query = query.or('is_chain.is.null,is_chain.eq.false');
     }
     if (search) {
       query = query.or(`name.ilike.%${search}%,address.ilike.%${search}%`);

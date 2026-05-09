@@ -48,6 +48,12 @@ export interface Lead {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  /** V2 Pro: multi-source cross-validation */
+  source_count?: number | null;
+  source_ids?: string[] | null;
+  /** V2 Pro: chain detection */
+  is_chain?: boolean | null;
+  chain_name?: string | null;
 }
 
 export interface LeadCreateInput {

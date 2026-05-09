@@ -10,6 +10,7 @@ import {
   HOUSTON_DEV_REPORTS_ARCHIVE_URL,
 } from '@/lib/houston-dev-reports/permit-ereport';
 import { pickText } from '@/lib/bay-area-food-import/shared';
+import { inferOpeningSignalFromPermitDate } from '@/lib/pipeline/infer-opening-signals';
 import type { FoodDataSource, NormalizedDraft } from './types';
 
 export const houstonPermitEreportSource: FoodDataSource = {
@@ -47,6 +48,7 @@ export const houstonPermitEreportSource: FoodDataSource = {
         license_type: l.license_type,
         source_raw: l.source_raw,
         lead_status: 'new',
+        opening_signals: inferOpeningSignalFromPermitDate(l.license_date) ?? undefined,
       };
     });
 

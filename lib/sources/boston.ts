@@ -21,15 +21,16 @@ import type { FoodDataSource, NormalizedDraft, SourceFetchResult } from './types
 import { buildCuisineLabel, pickText, snapshotSourceRaw } from '@/lib/bay-area-food-import/shared';
 
 const CKAN_BASE = 'https://data.boston.gov/api/3/action/datastore_search_sql';
-/** 待核实 resource id —— data.boston.gov 的 food-establishment-inspections 详情页查 */
-export const BOSTON_FOOD_RESOURCE = '4a6a3b23-6d6b-4a63-b81e-7fbd3c8c3da5';
+// Confirmed resource ID from data.boston.gov package "food-establishment-inspections" on 2026-05-09
+export const BOSTON_FOOD_RESOURCE = '4582bec6-2b4f-4f9e-bc55-cbaa73117f4c';
 
 function normalizeRow(row: Record<string, unknown>): NormalizedDraft | null {
   const name = pickText(row.businessname) ?? pickText(row.legalowner);
   if (!name || name.length < 2) return null;
 
   const externalId = pickText(row.licenseno) ?? pickText(row.license_no);
-  const inspectionDate = pickText(row.inspdttm) ?? pickText(row.violdttm);
+  // Confirmed field names from data.boston.gov 4582bec6: resultdttm (inspection), violdttm (violation), issdttm (license issue)
+  const inspectionDate = pickText(row.resultdttm) ?? pickText(row.violdttm) ?? pickText(row.issdttm);
   const city = pickText(row.city) ?? 'Boston';
 
   return {
@@ -63,12 +64,12 @@ export const bostonSource: FoodDataSource = {
   kind: 'inspection',
   portalUrl: 'https://data.boston.gov/',
   rateLimit: { rps: 3 },
-  enabled: false,
+  enabled: true,
 
   async fetchAndNormalize({ sinceDate }) {
     const id = this.id;
     const label = this.label;
-    const sql = `SELECT * FROM "${BOSTON_FOOD_RESOURCE}" WHERE "inspdttm" >= '${sinceDate}' ORDER BY "inspdttm" DESC LIMIT 300`;
+    const sql = `SELECT * FROM "${BOSTON_FOOD_RESOURCE}" WHERE "resultdttm" >= '${sinceDate}' ORDER BY "resultdttm" DESC LIMIT 300`;
 
     try {
       const response = await fetch(CKAN_BASE, {

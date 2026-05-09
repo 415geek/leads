@@ -3,10 +3,12 @@
 import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { useTranslations } from '@/lib/i18n';
 
 export function LogoutButton() {
   const pathname = usePathname();
   const router = useRouter();
+  const { t } = useTranslations();
 
   if (pathname === '/login') {
     return null;
@@ -15,11 +17,11 @@ export function LogoutButton() {
   const handleLogout = async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
-      toast.success('已退出');
+      toast.success(t.nav_logout);
       router.push('/login');
       router.refresh();
     } catch {
-      toast.error('退出失败');
+      toast.error(t.error_load);
     }
   };
 
@@ -31,7 +33,7 @@ export function LogoutButton() {
       onClick={handleLogout}
       className="border-white/40 bg-white/10 text-white hover:bg-white/20 hover:text-white"
     >
-      退出
+      {t.nav_logout}
     </Button>
   );
 }

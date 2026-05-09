@@ -18,6 +18,7 @@ import type { FoodDataSource, NormalizedDraft } from './types';
 import { fetchSocrata, toSourceFetchResult } from './socrata';
 import { buildCuisineLabel, pickText, snapshotSourceRaw } from '@/lib/bay-area-food-import/shared';
 
+// Resource ID f29f-zza5 confirmed against data.kingcounty.gov on 2026-05-09
 const ENDPOINT = 'https://data.kingcounty.gov/resource/f29f-zza5.json';
 const FETCH_LIMIT = 300;
 
@@ -26,10 +27,11 @@ function normalizeRow(row: Record<string, unknown>): NormalizedDraft | null {
   if (!name || name.length < 2) return null;
 
   const city = pickText(row.city) ?? 'Seattle';
+  // business_id is the stable facility ID (e.g. PR0089260); program_identifier duplicates name
   const externalId =
-    pickText(row.program_identifier) ??
     pickText(row.business_id) ??
-    pickText(row.establishment_id);
+    pickText(row.program_identifier) ??
+    pickText(row.inspection_serial_num);
 
   const inspectionDate = pickText(row.inspection_date);
 
@@ -58,8 +60,7 @@ export const seattleSource: FoodDataSource = {
   kind: 'inspection',
   portalUrl: 'https://data.kingcounty.gov/',
   rateLimit: { rps: 5 },
-  // Phase 3 灰度：默认关闭；在真实 resource id 核实后置为 true
-  enabled: false,
+  enabled: true,
 
   async fetchAndNormalize({ sinceDate }) {
     const where = `inspection_date >= '${sinceDate}T00:00:00'`;

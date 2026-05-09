@@ -57,6 +57,10 @@ describe('n8n webhook backward compatibility', () => {
       lead_score: 75,
       is_restaurant_confidence: null,
       ai_classification: null,
+      source_count: 1,
+      source_ids: ['sf_gov'],
+      is_chain: false,
+      chain_name: null,
     };
 
     // 同 (name, address, city) 重复应去重
@@ -87,6 +91,10 @@ describe('n8n webhook backward compatibility', () => {
       lead_score: 50,
       is_restaurant_confidence: null,
       ai_classification: null,
+      source_count: 1,
+      source_ids: ['sf_gov'],
+      is_chain: false,
+      chain_name: null,
     };
     const pipeline: PipelineLead = { ...legacy, external_id: 'sf-uniq-999' };
 

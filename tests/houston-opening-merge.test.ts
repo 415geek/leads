@@ -51,6 +51,10 @@ describe('mergeHoustonCrossSourceLeads', () => {
       lead_score: 50,
       is_restaurant_confidence: null,
       ai_classification: null,
+      source_count: 1,
+      source_ids: ['harris_county_dba'],
+      is_chain: false,
+      chain_name: null,
       ...overrides,
     };
   }
