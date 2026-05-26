@@ -341,7 +341,10 @@ const SYSTEM_PROMPT = `你是 B2B 销售情报分析助手，专长是综合「�
 4. source_url **必须**等于 prompt 摘要里 URL: xxx 后面那个原始 URL；如果你想引用的源不在列表里，**不要**输出该条。
 5. 同名歧义检测：若多个候选人撞名，只保留与种子姓名 + (公司或地区) 同时匹配最强的；其余在 rationale_zh 标记「歧义」。
 6. 若摘要文本里只看到「Last known near X」「Age 40-44」「Possible relatives: A, B」等含糊信息，仍可输出地址（城市级）/ age_range / relatives，但 confidence 不要超过 60。
-7. 电话号码必须是完整的 (xxx) xxx-xxxx 或 +1-xxx-xxx-xxxx 格式（仅当摘要里实际出现完整号码）；若摘要只显示「(xxx) xxx-****」掩码号，**不要**输出。
+7. 电话号码：
+   - 摘要中出现的**完整**号码 (xxx) xxx-xxxx：confidence 80-95
+   - 摘要中出现的**掩码**号码 (xxx) xxx-****、xxx-xxx-****、(xxx) ***-xxxx：可以输出，value 保留原文掩码字符，confidence 30-55，note 字段必须以「部分掩码 — 」开头说明哪些位被隐藏；这种号码常见于 whitepages / spokeo / radaris 的 free tier 摘要，对销售有定位价值（区号识别地区）。
+   - 不要把电话格式以外的随机数字串当电话；不要"补全"掩码位。
 8. summary_zh：第一句话明确说出「✅ 已确认 / ⚠️ 部分确认 / ❌ 未确认是同一人」+ 主要发现。`;
 
 function buildUserPrompt(

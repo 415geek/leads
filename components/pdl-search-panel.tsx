@@ -28,6 +28,12 @@ function confidenceColor(pct: number): string {
   return 'bg-slate-100 text-slate-700';
 }
 
+function isMaskedValue(value: string, note?: string): boolean {
+  if (/\*{2,}/.test(value)) return true;
+  if (note && /部分掩码|paywall|behind\s+paywall|masked/i.test(note)) return true;
+  return false;
+}
+
 function ContactList({
   title,
   items,
@@ -46,30 +52,42 @@ function ContactList({
         <p className="text-sm text-slate-400">{emptyHint}</p>
       ) : (
         <ul className="space-y-1">
-          {items.map((c, idx) => (
-            <li
-              key={`${c.value}-${idx}`}
-              className="flex flex-wrap items-center gap-2 text-sm"
-            >
-              <span className="font-medium text-slate-800 break-all">{c.value}</span>
-              <span
-                className={`rounded-full px-2 py-0.5 text-xs ${confidenceColor(c.confidence)}`}
+          {items.map((c, idx) => {
+            const masked = isMaskedValue(c.value, c.note);
+            return (
+              <li
+                key={`${c.value}-${idx}`}
+                className="flex flex-wrap items-center gap-2 text-sm"
               >
-                {c.confidence}%
-              </span>
-              <a
-                href={c.source_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-[#1e3a5f] underline underline-offset-2"
-              >
-                来源 ↗
-              </a>
-              {c.note && (
-                <span className="text-xs text-slate-500">— {c.note}</span>
-              )}
-            </li>
-          ))}
+                <span
+                  className={`font-medium break-all ${masked ? 'text-slate-600' : 'text-slate-800'}`}
+                >
+                  {c.value}
+                </span>
+                {masked && (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
+                    🔒 部分掩码
+                  </span>
+                )}
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs ${confidenceColor(c.confidence)}`}
+                >
+                  {c.confidence}%
+                </span>
+                <a
+                  href={c.source_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-[#1e3a5f] underline underline-offset-2"
+                >
+                  来源 ↗
+                </a>
+                {c.note && (
+                  <span className="text-xs text-slate-500">— {c.note}</span>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
