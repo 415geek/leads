@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
@@ -39,6 +39,23 @@ import {
   type DateRangePreset,
 } from '@/lib/leads-date-filter';
 
+function FilterField({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={className ?? 'flex w-full flex-col gap-1 sm:w-auto'}>
+      <span className="text-xs font-medium text-slate-600">{label}</span>
+      {children}
+    </div>
+  );
+}
+
 export default function LeadsPage() {
   const { t } = useTranslations();
 
@@ -75,6 +92,27 @@ export default function LeadsPage() {
     () => resolveLicenseDateQuery(dateRange, dateFrom, dateTo),
     [dateRange, dateFrom, dateTo],
   );
+
+  const dateRangeLabel = useMemo(() => {
+    const map: Record<DateRangePreset, string> = {
+      all: t.date_range_all,
+      '7d': t.date_range_7d,
+      '30d': t.date_range_30d,
+      '90d': t.date_range_90d,
+      custom: t.date_range_custom,
+    };
+    return map[dateRange];
+  }, [dateRange, t]);
+
+  const confidenceLabel = useMemo(() => {
+    const map: Record<string, string> = {
+      all: t.filter_unlimited,
+      '0.6': t.confidence_06,
+      '0.8': t.confidence_08,
+      '0.9': t.confidence_09,
+    };
+    return map[minConfidence] ?? t.filter_unlimited;
+  }, [minConfidence, t]);
 
   const importLabel =
     region === 'all'
@@ -376,68 +414,74 @@ export default function LeadsPage() {
               </SelectContent>
             </Select>
             
-            <div className="w-full sm:w-52">
+            <FilterField label={t.filter_label_city} className="w-full sm:w-52">
               <Input
-                placeholder="城市（从地址解析，可搜索）"
+                placeholder={t.filter_city_placeholder}
                 value={cityFilter}
                 onChange={(e) => setCityFilter(e.target.value)}
                 list="lead-city-suggestions"
-                aria-label="按城市筛选"
+                aria-label={t.filter_label_city}
               />
               <datalist id="lead-city-suggestions">
                 {cityDatalistOptions.map((c) => (
                   <option key={c} value={c} />
                 ))}
               </datalist>
-            </div>
+            </FilterField>
 
-            <Select
-              value={dateRange}
-              onValueChange={(v) => v && setDateRange(v as DateRangePreset)}
-            >
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t.date_range_all}</SelectItem>
-                <SelectItem value="7d">{t.date_range_7d}</SelectItem>
-                <SelectItem value="30d">{t.date_range_30d}</SelectItem>
-                <SelectItem value="90d">{t.date_range_90d}</SelectItem>
-                <SelectItem value="custom">{t.date_range_custom}</SelectItem>
-              </SelectContent>
-            </Select>
+            <FilterField label={t.filter_label_date} className="w-full sm:w-[180px]">
+              <Select
+                value={dateRange}
+                onValueChange={(v) => v && setDateRange(v as DateRangePreset)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue>{dateRangeLabel}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t.date_range_all}</SelectItem>
+                  <SelectItem value="7d">{t.date_range_7d}</SelectItem>
+                  <SelectItem value="30d">{t.date_range_30d}</SelectItem>
+                  <SelectItem value="90d">{t.date_range_90d}</SelectItem>
+                  <SelectItem value="custom">{t.date_range_custom}</SelectItem>
+                </SelectContent>
+              </Select>
+            </FilterField>
 
             {dateRange === 'custom' && (
-              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-                <Input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  aria-label={t.date_from}
-                  className="w-full sm:w-[150px]"
-                />
-                <span className="text-sm text-muted-foreground shrink-0">{t.date_range_to}</span>
-                <Input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  aria-label={t.date_to}
-                  className="w-full sm:w-[150px]"
-                />
-              </div>
+              <FilterField label={t.date_range_custom} className="w-full sm:w-auto">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    aria-label={t.date_from}
+                    className="w-full sm:w-[150px]"
+                  />
+                  <span className="text-sm text-muted-foreground shrink-0">{t.date_range_to}</span>
+                  <Input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    aria-label={t.date_to}
+                    className="w-full sm:w-[150px]"
+                  />
+                </div>
+              </FilterField>
             )}
 
-            <Select value={minConfidence} onValueChange={(v) => v && setMinConfidence(v)}>
-              <SelectTrigger className="w-full sm:w-44">
-                <SelectValue placeholder="AI 置信度" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">AI 置信度：全部</SelectItem>
-                <SelectItem value="0.6">≥ 0.6（推荐）</SelectItem>
-                <SelectItem value="0.8">≥ 0.8（严格）</SelectItem>
-                <SelectItem value="0.9">≥ 0.9（极严格）</SelectItem>
-              </SelectContent>
-            </Select>
+            <FilterField label={t.filter_label_confidence} className="w-full sm:w-44">
+              <Select value={minConfidence} onValueChange={(v) => v && setMinConfidence(v)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue>{confidenceLabel}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t.filter_unlimited}</SelectItem>
+                  <SelectItem value="0.6">{t.confidence_06}</SelectItem>
+                  <SelectItem value="0.8">{t.confidence_08}</SelectItem>
+                  <SelectItem value="0.9">{t.confidence_09}</SelectItem>
+                </SelectContent>
+              </Select>
+            </FilterField>
 
             <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
               <input
