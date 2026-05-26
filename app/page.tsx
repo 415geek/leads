@@ -8,6 +8,7 @@ import { ScoreBadge } from '@/components/score-badge';
 import { StatusBadge } from '@/components/status-badge';
 import Link from 'next/link';
 import { BusinessSearchPanel } from '@/components/business-search-panel';
+import { PdlSearchPanel } from '@/components/pdl-search-panel';
 import { dashboardBusinessSearchHref } from '@/lib/dashboard-business-search';
 import { useTranslations } from '@/lib/i18n';
 
@@ -93,6 +94,8 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-[#1e3a5f]">{t.dashboard_title}</h2>
+
+      <PdlSearchPanel />
 
       <BusinessSearchPanel />
 

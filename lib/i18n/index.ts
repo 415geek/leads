@@ -22,6 +22,20 @@ const zh = {
   empty_state: '暂无数据。请通过导入功能添加线索。',
   view_all: '查看全部 →',
   business_search: '商业搜索',
+  pdl_title: 'People Data Labs 人员搜索',
+  pdl_description:
+    '按姓名、地区或公司名搜索人员档案（调用 People Data Labs Person Search API，结果展示在下方）。',
+  pdl_label_name: '姓名',
+  pdl_label_region: '地区',
+  pdl_label_company: '公司名',
+  pdl_placeholder_name: '例如：John Smith',
+  pdl_placeholder_region: '例如：California / San Francisco',
+  pdl_placeholder_company: '例如：Acme Restaurant Group',
+  pdl_search_button: '搜索',
+  pdl_searching: '搜索中…',
+  pdl_no_results: '未找到匹配人员。',
+  pdl_results_summary: (total: number, shown: number) =>
+    `共 ${total} 条匹配，本页展示 ${shown} 条（最多 10 条，按 PDL 计费）。`,
 
   // Leads page
   leads_title: 'Leads 管理',
@@ -85,6 +99,20 @@ const en: typeof zh = {
   empty_state: 'No data yet. Use the import button to add leads.',
   view_all: 'View all →',
   business_search: 'Search',
+  pdl_title: 'People Data Labs Search',
+  pdl_description:
+    'Search people by name, region, or company via the PDL Person Search API. Results appear below.',
+  pdl_label_name: 'Name',
+  pdl_label_region: 'Region',
+  pdl_label_company: 'Company',
+  pdl_placeholder_name: 'e.g. John Smith',
+  pdl_placeholder_region: 'e.g. California / San Francisco',
+  pdl_placeholder_company: 'e.g. Acme Restaurant Group',
+  pdl_search_button: 'Search',
+  pdl_searching: 'Searching…',
+  pdl_no_results: 'No matching people found.',
+  pdl_results_summary: (total: number, shown: number) =>
+    `${total} matches; showing ${shown} (max 10 per request, PDL billing applies).`,
 
   leads_title: 'Leads Management',
   import_all: 'Import All Enabled Cities',
