@@ -8,6 +8,7 @@ import type { PdlPersonHit } from '@/lib/pdl/person-search';
 import type {
   DeepPersonIntelResult,
   DeepIntelContact,
+  DeepIntelEvidence,
 } from '@/lib/intel/deep-person-intel';
 import { useTranslations } from '@/lib/i18n';
 
@@ -85,8 +86,12 @@ function DeepIntelPanel({
   const { loading, error, result } = state;
   if (loading) {
     return (
-      <div className="mt-3 rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-sm text-slate-600">
-        正在调用 Tavily 搜索 + Claude 交叉验证，约需 10–25 秒…
+      <div className="mt-3 rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-sm text-slate-600 space-y-1">
+        <p>正在定向搜索公开 people-search 站点……</p>
+        <p className="text-xs text-slate-500">
+          whitepages · 411 · clustrmaps · truepeoplesearch · fastpeoplesearch · spokeo · radaris ·
+          beenverified · mylife · 等 15 个域 + 商务域。约 15–30 秒。
+        </p>
       </div>
     );
   }
@@ -114,7 +119,8 @@ function DeepIntelPanel({
           {result.match_confidence}%
         </span>
         <span className="text-xs text-slate-500">
-          引用 {result.search_snippets_used} 条联网摘要 · 模型 {result.model}
+          {result.people_search_hits} 条 people-search + {result.business_hits} 条商务摘要 · 模型{' '}
+          {result.model}
         </span>
       </div>
 
@@ -153,6 +159,16 @@ function DeepIntelPanel({
           items={result.socials}
           emptyHint="未找到其它社交账号。"
         />
+        <ContactList
+          title="可能的亲属 / 同住人"
+          items={result.possible_relatives}
+          emptyHint="未在公开记录中找到亲属信息。"
+        />
+        <ContactList
+          title="年龄段"
+          items={result.age_range}
+          emptyHint="未在公开记录中找到年龄段。"
+        />
       </div>
 
       {result.evidence.length > 0 && (
@@ -161,8 +177,17 @@ function DeepIntelPanel({
             展开全部 {result.evidence.length} 条引用源
           </summary>
           <ul className="mt-2 space-y-1 pl-4 list-disc">
-            {result.evidence.map((e, idx) => (
+            {result.evidence.map((e: DeepIntelEvidence, idx) => (
               <li key={`${e.url}-${idx}`} className="break-all">
+                <span
+                  className={`mr-1 inline-block rounded px-1 py-0.5 text-[10px] ${
+                    e.bucket === 'people_search'
+                      ? 'bg-purple-100 text-purple-800'
+                      : 'bg-sky-100 text-sky-800'
+                  }`}
+                >
+                  {e.bucket === 'people_search' ? 'PEOPLE' : 'BIZ'}
+                </span>
                 <a
                   href={e.url}
                   target="_blank"
