@@ -5,7 +5,10 @@
  * 本层只做与 schema 去重约束相关的最后一步 trim/lower，不改业务字段。
  */
 
+import { allKnownMetroCities, resolveLeadCity } from '@/lib/lead-city';
 import type { NormalizedDraft } from '@/lib/sources/types';
+
+const METRO_CITY_HINTS = allKnownMetroCities();
 
 function normText(s: string | null | undefined): string | null {
   if (s == null) return null;
@@ -14,12 +17,17 @@ function normText(s: string | null | undefined): string | null {
 }
 
 export function normalizeDraft(d: NormalizedDraft): NormalizedDraft {
+  const address = normText(d.address);
+  const cityRaw = normText(d.city) ?? d.city;
+  const city =
+    resolveLeadCity(cityRaw, address, METRO_CITY_HINTS) ?? cityRaw ?? d.city;
+
   return {
     ...d,
     name: normText(d.name) ?? d.name,
-    address: normText(d.address),
+    address,
     phone: normText(d.phone),
-    city: normText(d.city) ?? d.city,
+    city,
     external_id: normText(d.external_id),
   };
 }

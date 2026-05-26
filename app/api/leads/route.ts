@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { LeadFilters } from '@/types/lead';
+import { cityFilterOrClause } from '@/lib/lead-city';
 import { sourceIdsForRegion, type LeadRegionFilterId } from '@/lib/region-config';
 
 export async function GET(request: NextRequest) {
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
       }
     }
     if (city) {
-      query = query.eq('city', city);
+      query = query.or(cityFilterOrClause(city));
     }
     if (cuisineType) {
       query = query.ilike('cuisine_type', `%${cuisineType}%`);

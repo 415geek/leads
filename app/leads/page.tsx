@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
@@ -30,7 +30,6 @@ import { dashboardBusinessSearchHref } from '@/lib/dashboard-business-search';
 import {
   LEADS_REGION_STORAGE_KEY,
   REGION_OPTIONS,
-  cityOptionsForRegion,
   type LeadRegionFilterId,
 } from '@/lib/region-config';
 import { METRO_CONFIGS } from '@/lib/sources/metro-config';
@@ -53,7 +52,8 @@ export default function LeadsPage() {
   const [importing, setImporting] = useState(false);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<string>('all');
-  const [city, setCity] = useState<string>('all');
+  const [cityFilter, setCityFilter] = useState('');
+  const [citySuggestions, setCitySuggestions] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [region, setRegion] = useState<LeadRegionFilterId>(
@@ -193,7 +193,8 @@ export default function LeadsPage() {
       
       if (search) params.append('search', search);
       if (status !== 'all') params.append('status', status);
-      if (city !== 'all') params.append('city', city);
+      const cityQ = cityFilter.trim();
+      if (cityQ) params.append('city', cityQ);
       if (region !== 'all') params.append('region', region);
       if (chineseOnly) params.append('chinese_only', '1');
       if (hideChains) params.append('hide_chains', '1');
@@ -209,7 +210,7 @@ export default function LeadsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, status, city, region, chineseOnly, hideChains, minConfidence]);
+  }, [page, search, status, cityFilter, region, chineseOnly, hideChains, minConfidence]);
 
   useEffect(() => {
     try {
@@ -240,10 +241,37 @@ export default function LeadsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, status, city, region, chineseOnly, hideChains, minConfidence]);
+  }, [search, status, cityFilter, region, chineseOnly, hideChains, minConfidence]);
 
   useEffect(() => {
-    setCity('all');
+    let cancelled = false;
+    (async () => {
+      try {
+        const params = new URLSearchParams({ region });
+        const res = await fetch(`/api/leads/cities?${params}`);
+        const json = await res.json();
+        if (!cancelled && res.ok) {
+          setCitySuggestions(json.cities ?? []);
+        }
+      } catch {
+        if (!cancelled) setCitySuggestions([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [region]);
+
+  const cityDatalistOptions = useMemo(() => {
+    const q = cityFilter.trim().toLowerCase();
+    const list = q
+      ? citySuggestions.filter((c) => c.toLowerCase().includes(q))
+      : citySuggestions;
+    return list.slice(0, 80);
+  }, [cityFilter, citySuggestions]);
+
+  useEffect(() => {
+    setCityFilter('');
   }, [region]);
 
   return (
@@ -334,18 +362,20 @@ export default function LeadsPage() {
               </SelectContent>
             </Select>
             
-            <Select value={city} onValueChange={(v) => v && setCity(v)}>
-              <SelectTrigger className="w-full sm:w-44">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {cityOptionsForRegion(region).map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
+            <div className="w-full sm:w-52">
+              <Input
+                placeholder="城市（从地址解析，可搜索）"
+                value={cityFilter}
+                onChange={(e) => setCityFilter(e.target.value)}
+                list="lead-city-suggestions"
+                aria-label="按城市筛选"
+              />
+              <datalist id="lead-city-suggestions">
+                {cityDatalistOptions.map((c) => (
+                  <option key={c} value={c} />
                 ))}
-              </SelectContent>
-            </Select>
+              </datalist>
+            </div>
 
             <Select value={minConfidence} onValueChange={(v) => v && setMinConfidence(v)}>
               <SelectTrigger className="w-full sm:w-44">
