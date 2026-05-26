@@ -23,8 +23,12 @@ export const houstonPermitEreportSource: FoodDataSource = {
   portalUrl: HOUSTON_DEV_REPORTS_ARCHIVE_URL,
   rateLimit: { rps: 0.25 },
   enabled: true,
-  /** Weekly files + holiday gaps：略长于默认 30 天窗口 */
-  lookbackDays: 45,
+  /**
+   * Houston Planning 的 archive 自 2025-12-01 之后没有再发布新的 weekly xlsx
+   * （核查日期 2026-05-26）。为了把 2025 后半年遗留的有效数据拉进系统，
+   * 这里临时把窗口放到 365 天；待找到替代数据源后可下调回 45。
+   */
+  lookbackDays: 365,
 
   async fetchAndNormalize(opts) {
     const { result, leads } = await fetchHoustonPermitEreportLeads({
