@@ -81,4 +81,7 @@ export interface LeadFilters {
   cuisine_type?: string;
   min_score?: number;
   search?: string;
+  /** 登记/许可日期区间（license_date，YYYY-MM-DD） */
+  date_from?: string;
+  date_to?: string;
 }

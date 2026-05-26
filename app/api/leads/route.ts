@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { LeadFilters } from '@/types/lead';
 import { cityFilterOrClause } from '@/lib/lead-city';
+import { parseIsoDateParam } from '@/lib/leads-date-filter';
 import { sourceIdsForRegion, type LeadRegionFilterId } from '@/lib/region-config';
 
 export async function GET(request: NextRequest) {
@@ -19,6 +20,8 @@ export async function GET(request: NextRequest) {
     const chineseOnly = searchParams.get('chinese_only');
     const hideChains = searchParams.get('hide_chains');
     const search = searchParams.get('search');
+    const dateFrom = parseIsoDateParam(searchParams.get('date_from'));
+    const dateTo = parseIsoDateParam(searchParams.get('date_to'));
     const sortBy = searchParams.get('sort') || 'lead_score';
     const sortOrder = searchParams.get('order') || 'desc';
 
@@ -65,6 +68,12 @@ export async function GET(request: NextRequest) {
     }
     if (search) {
       query = query.or(`name.ilike.%${search}%,address.ilike.%${search}%`);
+    }
+    if (dateFrom) {
+      query = query.gte('license_date', dateFrom);
+    }
+    if (dateTo) {
+      query = query.lte('license_date', dateTo);
     }
 
     query = query

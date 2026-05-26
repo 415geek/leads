@@ -34,6 +34,10 @@ import {
 } from '@/lib/region-config';
 import { METRO_CONFIGS } from '@/lib/sources/metro-config';
 import { useTranslations } from '@/lib/i18n';
+import {
+  resolveLicenseDateQuery,
+  type DateRangePreset,
+} from '@/lib/leads-date-filter';
 
 export default function LeadsPage() {
   const { t } = useTranslations();
@@ -62,7 +66,15 @@ export default function LeadsPage() {
   const [chineseOnly, setChineseOnly] = useState(false);
   const [hideChains, setHideChains] = useState(false);
   const [minConfidence, setMinConfidence] = useState<string>('all');
+  const [dateRange, setDateRange] = useState<DateRangePreset>('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const regionHydrated = useRef(false);
+
+  const licenseDateQuery = useMemo(
+    () => resolveLicenseDateQuery(dateRange, dateFrom, dateTo),
+    [dateRange, dateFrom, dateTo],
+  );
 
   const importLabel =
     region === 'all'
@@ -199,6 +211,8 @@ export default function LeadsPage() {
       if (chineseOnly) params.append('chinese_only', '1');
       if (hideChains) params.append('hide_chains', '1');
       if (minConfidence !== 'all') params.append('min_confidence', minConfidence);
+      if (licenseDateQuery.date_from) params.append('date_from', licenseDateQuery.date_from);
+      if (licenseDateQuery.date_to) params.append('date_to', licenseDateQuery.date_to);
 
       const response = await fetch(`/api/leads?${params}`);
       const result = await response.json();
@@ -210,7 +224,7 @@ export default function LeadsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, status, cityFilter, region, chineseOnly, hideChains, minConfidence]);
+  }, [page, search, status, cityFilter, region, chineseOnly, hideChains, minConfidence, licenseDateQuery]);
 
   useEffect(() => {
     try {
@@ -241,7 +255,7 @@ export default function LeadsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, status, cityFilter, region, chineseOnly, hideChains, minConfidence]);
+  }, [search, status, cityFilter, region, chineseOnly, hideChains, minConfidence, dateRange, dateFrom, dateTo]);
 
   useEffect(() => {
     let cancelled = false;
@@ -376,6 +390,42 @@ export default function LeadsPage() {
                 ))}
               </datalist>
             </div>
+
+            <Select
+              value={dateRange}
+              onValueChange={(v) => v && setDateRange(v as DateRangePreset)}
+            >
+              <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t.date_range_all}</SelectItem>
+                <SelectItem value="7d">{t.date_range_7d}</SelectItem>
+                <SelectItem value="30d">{t.date_range_30d}</SelectItem>
+                <SelectItem value="90d">{t.date_range_90d}</SelectItem>
+                <SelectItem value="custom">{t.date_range_custom}</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {dateRange === 'custom' && (
+              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                <Input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  aria-label={t.date_from}
+                  className="w-full sm:w-[150px]"
+                />
+                <span className="text-sm text-muted-foreground shrink-0">{t.date_range_to}</span>
+                <Input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  aria-label={t.date_to}
+                  className="w-full sm:w-[150px]"
+                />
+              </div>
+            )}
 
             <Select value={minConfidence} onValueChange={(v) => v && setMinConfidence(v)}>
               <SelectTrigger className="w-full sm:w-44">
