@@ -1,9 +1,11 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import {
   buildDeepSearchQueries,
+  extractPhoneLookupLinks,
   runDeepPersonIntel,
   PEOPLE_SEARCH_DOMAINS,
   BUSINESS_SEARCH_DOMAINS,
+  PHONE_LOOKUP_DOMAINS,
   type TavilySnippetWithBucket,
 } from '../lib/intel/deep-person-intel';
 
@@ -165,6 +167,10 @@ describe('runDeepPersonIntel', () => {
     expect(result.business_hits).toBe(1);
     expect(result.evidence[0].bucket).toBe('people_search');
     expect(result.evidence[1].bucket).toBe('business');
+
+    expect(result.phone_lookup_links).toHaveLength(1);
+    expect(result.phone_lookup_links[0].domain).toBe('whitepages.com');
+    expect(result.phone_lookup_links[0].url).toContain('whitepages.com');
   });
 
   it('无 Tavily 摘要时强制 match_confidence ≤ 20 且联系方式全部清空', async () => {
@@ -208,5 +214,82 @@ describe('runDeepPersonIntel', () => {
     expect(result.possible_relatives).toEqual([]);
     expect(result.people_search_hits).toBe(0);
     expect(result.business_hits).toBe(0);
+    expect(result.phone_lookup_links).toEqual([]);
+  });
+});
+
+describe('extractPhoneLookupLinks', () => {
+  it('包含 PHONE_LOOKUP_DOMAINS 里的核心站点，排除 clustrmaps / neighbor.report', () => {
+    expect(PHONE_LOOKUP_DOMAINS).toContain('whitepages.com');
+    expect(PHONE_LOOKUP_DOMAINS).toContain('spokeo.com');
+    expect(PHONE_LOOKUP_DOMAINS).toContain('radaris.com');
+    expect(PHONE_LOOKUP_DOMAINS).not.toContain('clustrmaps.com');
+    expect(PHONE_LOOKUP_DOMAINS).not.toContain('neighbor.report');
+  });
+
+  it('从 people_search bucket 中按域名白名单挑链接，并按 perDomain 限制', () => {
+    const snippets: TavilySnippetWithBucket[] = [
+      {
+        title: 'Whitepages A',
+        url: 'https://www.whitepages.com/name/Lingyu-Lai/SF',
+        content: '...',
+        bucket: 'people_search',
+      },
+      {
+        title: 'Whitepages B',
+        url: 'https://www.whitepages.com/person/abc',
+        content: '...',
+        bucket: 'people_search',
+      },
+      {
+        title: 'Whitepages C (超出 perDomain 限制)',
+        url: 'https://www.whitepages.com/person/xyz',
+        content: '...',
+        bucket: 'people_search',
+      },
+      {
+        title: 'Spokeo',
+        url: 'https://www.spokeo.com/Lingyu-Lai',
+        content: '...',
+        bucket: 'people_search',
+      },
+      {
+        title: 'ClustrMaps (非 phone-first 域，应跳过)',
+        url: 'https://clustrmaps.com/persons/Lingyu-Lai',
+        content: '...',
+        bucket: 'people_search',
+      },
+      {
+        title: 'LinkedIn (business bucket，应跳过)',
+        url: 'https://www.linkedin.com/in/lingyu-lai',
+        content: '...',
+        bucket: 'business',
+      },
+    ];
+
+    const links = extractPhoneLookupLinks(snippets);
+    expect(links).toHaveLength(3);
+
+    const whitepages = links.filter((l) => l.domain === 'whitepages.com');
+    expect(whitepages).toHaveLength(2);
+
+    expect(links.some((l) => l.domain === 'spokeo.com')).toBe(true);
+    expect(links.some((l) => l.url.includes('clustrmaps'))).toBe(false);
+    expect(links.some((l) => l.url.includes('linkedin'))).toBe(false);
+  });
+
+  it('忽略畸形 URL', () => {
+    const snippets: TavilySnippetWithBucket[] = [
+      { title: 'bad', url: 'not-a-url', content: '', bucket: 'people_search' },
+      {
+        title: 'good',
+        url: 'https://www.whitepages.com/name/x',
+        content: '',
+        bucket: 'people_search',
+      },
+    ];
+    const links = extractPhoneLookupLinks(snippets);
+    expect(links).toHaveLength(1);
+    expect(links[0].domain).toBe('whitepages.com');
   });
 });

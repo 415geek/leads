@@ -189,6 +189,34 @@ function DeepIntelPanel({
         />
       </div>
 
+      {result.phone_lookup_links && result.phone_lookup_links.length > 0 && (
+        <div className="rounded-md border border-amber-200 bg-amber-50/60 p-3">
+          <p className="text-xs font-semibold text-amber-900">
+            📞 手动查号 —{' '}
+            {result.phones.length === 0
+              ? '未抽到电话号码，但已在以下页面定位到此人，点击可手动查看（free tier 通常显示区号 + 前 3 位）'
+              : '若需获取更多号码，可在以下页面手动查询 / 解锁'}
+          </p>
+          <ul className="mt-2 space-y-1">
+            {result.phone_lookup_links.map((link, idx) => (
+              <li key={`${link.url}-${idx}`} className="flex items-start gap-2 text-sm">
+                <span className="mt-0.5 rounded bg-amber-200/70 px-1.5 py-0.5 text-[10px] font-mono text-amber-900">
+                  {link.domain}
+                </span>
+                <a
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="break-all text-amber-900 underline underline-offset-2 hover:text-amber-700"
+                >
+                  {link.title || link.url}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {result.evidence.length > 0 && (
         <details className="text-xs text-slate-500">
           <summary className="cursor-pointer select-none">

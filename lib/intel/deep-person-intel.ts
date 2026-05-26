@@ -56,6 +56,27 @@ export const BUSINESS_SEARCH_DOMAINS = [
   'signalhire.com',
 ] as const;
 
+/**
+ * PEOPLE_SEARCH_DOMAINS 的子集 — 主打「电话号码列表」的站点。
+ * AI 抽不到号码时，把这些原始 URL 端给用户，让用户点过去自己看。
+ * 排除 clustrmaps.com（地图/邻居）、neighbor.report（邻居）等非 phone-first 站。
+ */
+export const PHONE_LOOKUP_DOMAINS = [
+  'whitepages.com',
+  '411.com',
+  'truepeoplesearch.com',
+  'fastpeoplesearch.com',
+  'spokeo.com',
+  'radaris.com',
+  'beenverified.com',
+  'mylife.com',
+  'peoplefinders.com',
+  'peoplelooker.com',
+  'ussearch.com',
+  'instantcheckmate.com',
+  'thatsthem.com',
+] as const;
+
 export interface DeepIntelSeed {
   full_name: string;
   job_title?: string | null;
@@ -78,6 +99,16 @@ export interface DeepIntelEvidence {
   bucket: 'people_search' | 'business';
 }
 
+/**
+ * 「手动查号」直达链接 — 当 AI 拿不到完整/掩码号码时的兜底。
+ * 用户点进去通常能看到 free-tier 摘要（区号 + 前 3 位），付费可解锁完整号。
+ */
+export interface PhoneLookupLink {
+  url: string;
+  title: string;
+  domain: string;
+}
+
 export interface DeepPersonIntelResult {
   updated_at: string;
   model: string;
@@ -97,6 +128,12 @@ export interface DeepPersonIntelResult {
   people_search_hits: number;
   business_hits: number;
   evidence: DeepIntelEvidence[];
+  /**
+   * 电话查询直达链接（whitepages / spokeo 等 phone-first 站点）。
+   * 即使 phones 数组为空，这些链接已经过 Tavily 验证存在该人物的页面，
+   * 用户点击后通常能看到掩码号或付费解锁入口。
+   */
+  phone_lookup_links: PhoneLookupLink[];
 }
 
 const MAX_RESULTS_PER_QUERY = 6;
@@ -232,6 +269,51 @@ export async function runTavilyTwoBucketSearch(queries: {
 
 function isRecord(x: unknown): x is Record<string, unknown> {
   return x !== null && typeof x === 'object' && !Array.isArray(x);
+}
+
+/**
+ * 从 Tavily 命中里挑出 phone-first 站点的链接，每个域名最多保留 2 条。
+ * 用于在 phones 为空或不完整时给销售一个「点过去自己看」的兜底入口。
+ */
+export function extractPhoneLookupLinks(
+  snippets: TavilySnippetWithBucket[],
+  maxPerDomain = 2,
+  maxTotal = 10,
+): PhoneLookupLink[] {
+  const out: PhoneLookupLink[] = [];
+  const perDomainCount = new Map<string, number>();
+  const seenUrls = new Set<string>();
+
+  for (const s of snippets) {
+    if (s.bucket !== 'people_search') continue;
+    if (!s.url || seenUrls.has(s.url)) continue;
+
+    let host: string;
+    try {
+      host = new URL(s.url).hostname.replace(/^www\./i, '').toLowerCase();
+    } catch {
+      continue;
+    }
+
+    const matchedDomain = PHONE_LOOKUP_DOMAINS.find(
+      (d) => host === d || host.endsWith(`.${d}`),
+    );
+    if (!matchedDomain) continue;
+
+    const count = perDomainCount.get(matchedDomain) ?? 0;
+    if (count >= maxPerDomain) continue;
+
+    seenUrls.add(s.url);
+    perDomainCount.set(matchedDomain, count + 1);
+    out.push({
+      url: s.url,
+      title: s.title || matchedDomain,
+      domain: matchedDomain,
+    });
+
+    if (out.length >= maxTotal) break;
+  }
+  return out;
 }
 
 function clampPct(n: unknown): number {
@@ -435,5 +517,6 @@ export async function runDeepPersonIntel(
       url: s.url,
       bucket: s.bucket,
     })),
+    phone_lookup_links: extractPhoneLookupLinks(snippets),
   };
 }
