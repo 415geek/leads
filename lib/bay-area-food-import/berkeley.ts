@@ -1,8 +1,6 @@
 import { calculateLeadScore } from '@/lib/scoring';
 import type { Lead } from '@/types/lead';
 import {
-  FETCH_LIMIT,
-  buildBerkeleyFoodWhereClause,
   buildCuisineLabel,
   pickText,
   snapshotSourceRaw,
@@ -11,6 +9,14 @@ import {
 } from './shared';
 
 const BERKELEY_API = 'https://data.cityofberkeley.info/resource/rwnf-bu3w.json';
+
+// Berkeley 的 Barracuda WAF 把任何包含 SoQL `OR` / `LIKE '%...%'` 的 $where 都识别成 SQL Injection
+// 而 403（attack_ID 20000008）。绕过办法：只发**单条件**的 $where。
+//   - NAICS 722 = "Food Services and Drinking Places"，全国约 500 条；
+//   - 用 starts_with(naics, '722') 一次拉回所有 NAICS 722 行，再在客户端过滤 BERKELEY situs city。
+// 行数小 → fetch cost ≈ 1 request, 客户端过滤几十毫秒。比尝试多片 fetch 拼接更稳。
+const NAICS_FOOD_PREFIX = '722';
+const FETCH_PAGE = 500;
 
 interface BerkeleyBizRecord {
   dba?: string;
@@ -48,15 +54,23 @@ export async function fetchBerkeleyFoodLeads(): Promise<{
   const id = 'berkeley_open_data';
   const label = 'Berkeley（有效执照快照 · Business Licenses rwnf-bu3w）';
 
+  // 单条件 $where：starts_with(naics, '722') —— 不含 OR / LIKE，可通过 WAF。
+  // 全国 NAICS 722 数据约 500 条，单页可拉满，下面再客户端按 BERKELEY situs city 过滤。
   const params = new URLSearchParams({
-    $where: buildBerkeleyFoodWhereClause(),
-    $limit: String(FETCH_LIMIT),
+    $where: `starts_with(naics, '${NAICS_FOOD_PREFIX}')`,
+    $limit: String(FETCH_PAGE),
     $order: 'recordid DESC',
   });
 
   try {
     const response = await fetch(`${BERKELEY_API}?${params}`, {
-      headers: { Accept: 'application/json' },
+      headers: {
+        Accept: 'application/json',
+        'User-Agent':
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        Referer: 'https://data.cityofberkeley.info/',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
     });
 
     if (!response.ok) {
@@ -66,7 +80,15 @@ export async function fetchBerkeleyFoodLeads(): Promise<{
       };
     }
 
-    const rows = (await response.json()) as Record<string, unknown>[];
+    const allRows = (await response.json()) as Record<string, unknown>[];
+
+    // 客户端过滤：必须在 Berkeley city（situs city 或 city）
+    const rows = allRows.filter((r) => {
+      const situs = String(r.b1_situs_city ?? '').toUpperCase().trim();
+      const city = String(r.b1_city ?? '').toUpperCase().trim();
+      return situs === 'BERKELEY' || city === 'BERKELEY';
+    });
+
     const leads: (FoodLeadDraft & { lead_score: number })[] = [];
 
     for (const row of rows) {

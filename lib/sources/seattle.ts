@@ -61,6 +61,9 @@ export const seattleSource: FoodDataSource = {
   portalUrl: 'https://data.kingcounty.gov/',
   rateLimit: { rps: 5 },
   enabled: true,
+  // King County 发布节奏极慢（2026-05 时数据集 rowsUpdatedAt 仍停在 2025-12 一带），
+  // 用 240 天窗口确保至少能捞回最近一次更新；后续如政府方恢复正常发布，可调回 60 天。
+  lookbackDays: 240,
 
   async fetchAndNormalize({ sinceDate }) {
     const where = `inspection_date >= '${sinceDate}T00:00:00'`;

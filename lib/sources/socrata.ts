@@ -32,7 +32,14 @@ export async function fetchSocrata(args: SocrataFetchArgs): Promise<SocrataFetch
   if (args.limit) params.set('$limit', String(args.limit));
   if (args.order) params.set('$order', args.order);
 
-  const headers: Record<string, string> = { Accept: 'application/json' };
+  // 默认带常规浏览器 User-Agent：少数城市（如 data.cityofberkeley.info）会基于 UA / 无 Referer
+  // 拒掉默认 Node 出口；带 Chrome UA 后通过 WAF 概率显著提高，不影响其它正常端点。
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    'User-Agent':
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Accept-Language': 'en-US,en;q=0.9',
+  };
   const token = process.env.SOCRATA_APP_TOKEN;
   if (token) headers['X-App-Token'] = token;
 

@@ -62,6 +62,8 @@ export const austinSource: FoodDataSource = {
   portalUrl: 'https://data.austintexas.gov/',
   rateLimit: { rps: 5 },
   enabled: true,
+  // Austin 政府方发布节奏偏慢（典型滞后 30–45 天），用 90 天窗口避免任何天的拉取出现 0 命中。
+  lookbackDays: 90,
 
   async fetchAndNormalize({ sinceDate }) {
     const where = `inspection_date >= '${sinceDate}T00:00:00'`;
