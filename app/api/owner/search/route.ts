@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { runOwnerKeywordMatch } from '@/lib/whitepages/owner-keyword-match';
-import { searchWhitepagesOwners } from '@/lib/whitepages/owner-search';
+import { resolveOwnerSearchContext, searchWhitepagesOwners } from '@/lib/whitepages/owner-search';
 
 const MAX_FIELD_LEN = 200;
 
@@ -30,20 +30,23 @@ export async function POST(request: Request) {
     const address = trimField(body.address, 200);
     const keywords = trimField(body.keywords, 200);
 
-    if (name.length < 2) {
+    const ctx = resolveOwnerSearchContext({ name, region, address, keywords });
+    if (!ctx.queryValid) {
       return NextResponse.json(
-        { error: '请先填写姓名（至少 2 个字符），再基于 Whitepages 结果做关键字交叉验证' },
+        {
+          error: '请至少填写姓名、地址或地区之一（地址至少 3 个字符的街道信息）',
+        },
         { status: 400 },
       );
     }
 
     const wpResult = await searchWhitepagesOwners(apiKey, { name, region, address });
 
-    if (keywords.length >= 2 && wpResult.results.length > 0) {
+    if (ctx.shouldRunKeywordAnalysis && wpResult.results.length > 0) {
       if (!process.env.ANTHROPIC_API_KEY?.trim()) {
         return NextResponse.json(
           {
-            error: '未配置 Anthropic API 密钥，无法执行匹配关键字交叉验证',
+            error: '未配置 Anthropic API 密钥，无法执行联网交叉验证',
             hint: '请在 Vercel 或 .env.local 设置 ANTHROPIC_API_KEY',
           },
           { status: 503 },
@@ -51,10 +54,10 @@ export async function POST(request: Request) {
       }
 
       const matchResult = await runOwnerKeywordMatch({
-        name,
+        name: name || undefined,
         region: region || undefined,
         address: address || undefined,
-        keywords,
+        keywords: keywords || undefined,
         candidates: wpResult.results,
       });
 
@@ -67,7 +70,8 @@ export async function POST(request: Request) {
         web_snippets_used: matchResult.web_snippets_used,
         registry_snippets_used: matchResult.registry_snippets_used,
         opencorporates_companies_found: matchResult.opencorporates_companies_found,
-        keywords,
+        keywords: ctx.keywordsForMatch,
+        search_mode: ctx.hasName ? 'name' : ctx.hasAddress ? 'address' : 'region',
       });
     }
 
@@ -76,14 +80,18 @@ export async function POST(request: Request) {
       keyword_analysis_applied: false,
       analyses: {},
       keywords: keywords || undefined,
+      search_mode: ctx.hasName ? 'name' : ctx.hasAddress ? 'address' : 'region',
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     if (msg === 'EMPTY_QUERY') {
-      return NextResponse.json({ error: '请至少填写姓名' }, { status: 400 });
+      return NextResponse.json(
+        { error: '请至少填写姓名、地址或地区之一' },
+        { status: 400 },
+      );
     }
     if (msg === 'EMPTY_KEYWORDS' || msg === 'NO_CANDIDATES') {
-      return NextResponse.json({ error: '匹配关键字验证失败' }, { status: 400 });
+      return NextResponse.json({ error: '交叉验证失败' }, { status: 400 });
     }
     if (msg.startsWith('WP_429')) {
       return NextResponse.json(

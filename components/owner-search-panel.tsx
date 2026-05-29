@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import type { OwnerKeywordAnalysis } from '@/lib/whitepages/owner-keyword-match';
 import type { WhitepagesPersonRecord, WhitepagesSearchMetadata } from '@/lib/whitepages/owner-search';
+import { parseAddressInput } from '@/lib/whitepages/owner-search';
 import { formatOwnerRecord } from '@/lib/whitepages/format-record';
 import { useTranslations } from '@/lib/i18n';
 
@@ -261,7 +262,18 @@ export function OwnerSearchPanel() {
   const [searched, setSearched] = useState(false);
   const [page, setPage] = useState(1);
 
-  const canSubmit = name.trim().length >= 2;
+  const canSubmit = useMemo(() => {
+    const n = name.trim();
+    const r = region.trim();
+    const addr = parseAddressInput(address.trim());
+    return n.length >= 2 || r.length >= 2 || Boolean(addr.street && addr.street.length >= 3);
+  }, [name, region, address]);
+
+  const willCrossValidate = useMemo(() => {
+    if (keywords.trim().length >= 2) return true;
+    const addr = parseAddressInput(address.trim());
+    return Boolean(addr.street && addr.street.length >= 3);
+  }, [keywords, address]);
 
   const totalPages = Math.max(1, Math.ceil(results.length / RESULTS_PER_PAGE));
   const pageResults = useMemo(() => {
@@ -326,8 +338,7 @@ export function OwnerSearchPanel() {
     }
   };
 
-  const loadingLabel =
-    keywords.trim().length >= 2 ? t.owner_searching_with_keywords : t.owner_searching;
+  const loadingLabel = willCrossValidate ? t.owner_searching_with_keywords : t.owner_searching;
 
   return (
     <Card className="border-[#1e3a5f]/20">
@@ -346,7 +357,6 @@ export function OwnerSearchPanel() {
                 placeholder={t.owner_placeholder_name}
                 className="mt-1"
                 autoComplete="off"
-                required
               />
             </div>
             <div>

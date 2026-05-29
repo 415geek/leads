@@ -15,15 +15,16 @@ import {
   registrySnippetsBlock,
   type OwnerRegistryEvidence,
 } from '@/lib/whitepages/owner-registry-evidence';
+import { resolveOwnerSearchContext } from '@/lib/whitepages/owner-search';
 
 const OWNER_MATCH_MODEL =
   process.env.ANTHROPIC_OWNER_MATCH_MODEL || 'claude-sonnet-4-20250514';
 
 export interface OwnerKeywordMatchInput {
-  name: string;
+  name?: string;
   region?: string;
   address?: string;
-  keywords: string;
+  keywords?: string;
   candidates: WhitepagesPersonRecord[];
 }
 
@@ -91,29 +92,29 @@ function candidateSummaryBlock(record: WhitepagesPersonRecord, idx: number): str
 }
 
 export function buildOwnerKeywordWebQueries(input: {
-  name: string;
+  name?: string;
   region?: string;
   address?: string;
   keywords: string;
 }): { generalQueries: string[]; peopleQueries: string[]; businessQueries: string[] } {
-  const name = quotedIfHasSpace(input.name.trim());
+  const namePart = input.name?.trim() ? quotedIfHasSpace(input.name.trim()) : '';
   const keywords = quotedIfHasSpace(input.keywords.trim());
   const region = input.region?.trim() ? quotedIfHasSpace(input.region.trim()) : '';
   const address = input.address?.trim() ? quotedIfHasSpace(input.address.trim()) : '';
 
   const generalQueries = [
-    [name, keywords, address, region].filter(Boolean).join(' '),
+    [namePart, keywords, address, region].filter(Boolean).join(' '),
     [keywords, address, 'restaurant owner', region].filter(Boolean).join(' '),
-    [name, keywords, address, 'restaurant'].filter(Boolean).join(' '),
+    [namePart, keywords, address, 'restaurant'].filter(Boolean).join(' '),
   ];
 
   const peopleQueries = [
-    [name, region, address, keywords].filter(Boolean).join(' '),
-    [name, address, region, 'phone'].filter(Boolean).join(' '),
+    [namePart, region, address, keywords].filter(Boolean).join(' '),
+    [namePart, address, region, 'phone'].filter(Boolean).join(' '),
   ];
 
   const businessQueries = [
-    [name, keywords, address].filter(Boolean).join(' '),
+    [namePart, keywords, address].filter(Boolean).join(' '),
     [keywords, address, 'owner', region].filter(Boolean).join(' '),
   ];
 
@@ -136,7 +137,7 @@ export function buildOwnerKeywordWebQueries(input: {
 }
 
 async function collectWebSnippets(input: {
-  name: string;
+  name?: string;
   region?: string;
   address?: string;
   keywords: string;
@@ -269,7 +270,8 @@ export async function runOwnerKeywordMatch(
   input: OwnerKeywordMatchInput,
   options: RunOwnerKeywordMatchOptions = {},
 ): Promise<OwnerKeywordMatchResult> {
-  const keywords = input.keywords.trim();
+  const ctx = resolveOwnerSearchContext(input);
+  const keywords = ctx.keywordsForMatch;
   if (keywords.length < 2) {
     throw new Error('EMPTY_KEYWORDS');
   }
@@ -280,9 +282,11 @@ export async function runOwnerKeywordMatch(
     throw new Error('ANTHROPIC_API_KEY is not configured');
   }
 
+  const nameForPrompt = ctx.nameForPrompt;
+
   const [snippets, registryEvidence] = await Promise.all([
     collectWebSnippets({
-      name: input.name,
+      name: nameForPrompt,
       region: input.region,
       address: input.address,
       keywords,
@@ -291,7 +295,7 @@ export async function runOwnerKeywordMatch(
     options.registryEvidenceOverride
       ? options.registryEvidenceOverride()
       : collectOwnerRegistryEvidence({
-          name: input.name,
+          name: nameForPrompt,
           region: input.region,
           address: input.address,
           keywords,
@@ -325,11 +329,11 @@ export async function runOwnerKeywordMatch(
 {"idx":0,"keyword_match_score":82,"summary_zh":"≤50字","rationale_zh":"≤80字","matched_signals":["OpenCorporates 董事一致","地址吻合"]}
 禁止 markdown，禁止其它文字，禁止在 JSON 外添加解释。`;
 
-  const sharedContext = `【搜索姓名】${input.name}
+  const sharedContext = `【搜索姓名】${nameForPrompt}
 【地区】${input.region?.trim() || '—'}
 【用户输入地址（用于与注册地址/现居地址交叉比对）】
 ${input.address?.trim() || '—'}
-【匹配关键字（店名/DBA/公司/电话/亲属等）】
+【匹配关键字（店名/DBA/公司/电话/亲属/地址线索）】
 ${keywords}
 
 【OpenCorporates API 企业登记（管辖区 ${registryEvidence.jurisdiction_code}，${registryEvidence.opencorporates_companies.length} 条）】

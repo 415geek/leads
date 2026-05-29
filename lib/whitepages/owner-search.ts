@@ -30,6 +30,56 @@ export interface OwnerSearchResult {
   metadata: WhitepagesSearchMetadata | null;
 }
 
+export interface OwnerSearchContext {
+  /** 是否满足 Whitepages 最低查询条件 */
+  queryValid: boolean;
+  hasName: boolean;
+  hasAddress: boolean;
+  hasRegion: boolean;
+  /** 传给 LLM / Tavily 的检索姓名（无姓名时用关键字或占位说明） */
+  nameForPrompt: string;
+  /** 交叉验证关键字（显式关键字，或地址兜底） */
+  keywordsForMatch: string;
+  shouldRunKeywordAnalysis: boolean;
+}
+
+export function resolveOwnerSearchContext(input: OwnerSearchInput & { keywords?: string }): OwnerSearchContext {
+  const name = input.name?.trim() ?? '';
+  const region = input.region?.trim() ?? '';
+  const address = input.address?.trim() ?? '';
+  const keywords = input.keywords?.trim() ?? '';
+  const addrParts = parseAddressInput(address);
+  const hasName = name.length >= 2;
+  const hasAddress = Boolean(addrParts.street && addrParts.street.length >= 3);
+  const hasRegion = region.length >= 2;
+  const queryValid = hasName || hasAddress || hasRegion;
+
+  const keywordsForMatch =
+    keywords.length >= 2 ? keywords : hasAddress ? address : '';
+  const shouldRunKeywordAnalysis = keywordsForMatch.length >= 2;
+
+  let nameForPrompt = name;
+  if (!hasName) {
+    if (keywords.length >= 2) {
+      nameForPrompt = keywords;
+    } else if (hasAddress) {
+      nameForPrompt = '（未提供姓名，按地址检索）';
+    } else {
+      nameForPrompt = '（未提供姓名）';
+    }
+  }
+
+  return {
+    queryValid,
+    hasName,
+    hasAddress,
+    hasRegion,
+    nameForPrompt,
+    keywordsForMatch,
+    shouldRunKeywordAnalysis,
+  };
+}
+
 const US_STATE_CODES = new Set([
   'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
   'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
@@ -119,9 +169,19 @@ export function buildWhitepagesQueryParams(input: OwnerSearchInput): URLSearchPa
   if (hasName) params.set('name', name);
 
   const regionParts = parseRegionInput(region);
-  const city = addrParts.city ?? regionParts.city;
+  let street = addrParts.street;
+  let city = addrParts.city ?? regionParts.city;
   const state_code = addrParts.state_code ?? regionParts.state_code;
-  if (addrParts.street) params.set('street', addrParts.street);
+
+  if (street && regionParts.city && !addrParts.city) {
+    const cityName = regionParts.city;
+    const pattern = new RegExp(`\\b${cityName.replace(/\s+/g, '\\s+')}\\s*$`, 'i');
+    if (pattern.test(street) && street.length > cityName.length + 4) {
+      street = street.replace(pattern, '').trim().replace(/,\s*$/, '');
+    }
+  }
+
+  if (street) params.set('street', street);
   if (addrParts.zipcode) params.set('zipcode', addrParts.zipcode);
   if (city) params.set('city', city);
   if (state_code) params.set('state_code', state_code);
