@@ -22,20 +22,22 @@ const zh = {
   empty_state: '暂无数据。请通过导入功能添加线索。',
   view_all: '查看全部 →',
   business_search: '商业搜索',
-  pdl_title: 'People Data Labs 人员搜索',
-  pdl_description:
-    '按姓名、地区或公司名搜索人员档案（调用 People Data Labs Person Search API，结果展示在下方）。',
-  pdl_label_name: '姓名',
-  pdl_label_region: '地区',
-  pdl_label_company: '公司名',
-  pdl_placeholder_name: '例如：John Smith',
-  pdl_placeholder_region: '例如：California / San Francisco',
-  pdl_placeholder_company: '例如：Acme Restaurant Group',
-  pdl_search_button: '搜索',
-  pdl_searching: '搜索中…',
-  pdl_no_results: '未找到匹配人员。',
-  pdl_results_summary: (total: number, shown: number) =>
-    `共 ${total} 条匹配，本页展示 ${shown} 条（最多 10 条，按 PDL 计费）。`,
+  owner_title: '老板信息搜索',
+  owner_description:
+    '按姓名、地区或公司名搜索餐厅老板/经营者（Whitepages Pro Person Search API，下方展示 API 返回的全部字段）。',
+  owner_label_name: '姓名',
+  owner_label_region: '地区',
+  owner_label_company: '公司 / 店名',
+  owner_placeholder_name: '例如：John Smith',
+  owner_placeholder_region: '例如：San Francisco, CA / California',
+  owner_placeholder_company: '例如：Acme Restaurant（可选，结果内过滤）',
+  owner_search_button: '搜索',
+  owner_searching: '搜索中…',
+  owner_no_results: '未找到匹配的老板信息。',
+  owner_results_summary: (total: number, shown: number) =>
+    `共 ${total} 条匹配，本页展示 ${shown} 条（Whitepages Pro 单次最多 15 条）。`,
+  owner_company_filter_note:
+    'Whitepages API 不支持按公司名检索；已在返回结果中按 company_name / job_title 做客户端过滤。',
 
   // Leads page
   leads_title: 'Leads 管理',
@@ -99,20 +101,22 @@ const en: typeof zh = {
   empty_state: 'No data yet. Use the import button to add leads.',
   view_all: 'View all →',
   business_search: 'Search',
-  pdl_title: 'People Data Labs Search',
-  pdl_description:
-    'Search people by name, region, or company via the PDL Person Search API. Results appear below.',
-  pdl_label_name: 'Name',
-  pdl_label_region: 'Region',
-  pdl_label_company: 'Company',
-  pdl_placeholder_name: 'e.g. John Smith',
-  pdl_placeholder_region: 'e.g. California / San Francisco',
-  pdl_placeholder_company: 'e.g. Acme Restaurant Group',
-  pdl_search_button: 'Search',
-  pdl_searching: 'Searching…',
-  pdl_no_results: 'No matching people found.',
-  pdl_results_summary: (total: number, shown: number) =>
-    `${total} matches; showing ${shown} (max 10 per request, PDL billing applies).`,
+  owner_title: 'Business Owner Search',
+  owner_description:
+    'Search restaurant owners by name, region, or company (Whitepages Pro Person Search API; all response fields shown below).',
+  owner_label_name: 'Name',
+  owner_label_region: 'Region',
+  owner_label_company: 'Company / DBA',
+  owner_placeholder_name: 'e.g. John Smith',
+  owner_placeholder_region: 'e.g. San Francisco, CA / California',
+  owner_placeholder_company: 'e.g. Acme Restaurant (optional, filters results)',
+  owner_search_button: 'Search',
+  owner_searching: 'Searching…',
+  owner_no_results: 'No matching owner records found.',
+  owner_results_summary: (total: number, shown: number) =>
+    `${total} matches; showing ${shown} (Whitepages Pro max 15 per request).`,
+  owner_company_filter_note:
+    'Whitepages API does not search by company; results were filtered client-side by company_name / job_title.',
 
   leads_title: 'Leads Management',
   import_all: 'Import All Enabled Cities',
