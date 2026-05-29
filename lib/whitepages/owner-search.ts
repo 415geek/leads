@@ -14,6 +14,14 @@ export interface WhitepagesSearchMetadata {
 export interface OwnerSearchInput {
   name?: string;
   region?: string;
+  address?: string;
+}
+
+export interface ParsedAddressInput {
+  street?: string;
+  city?: string;
+  state_code?: string;
+  zipcode?: string;
 }
 
 export interface OwnerSearchResult {
@@ -68,18 +76,53 @@ export function parseRegionInput(region: string): { city?: string; state_code?: 
   return { city: trimmed };
 }
 
+/** 解析用户输入的街道地址，可与「地区」字段互补 */
+export function parseAddressInput(address: string): ParsedAddressInput {
+  const trimmed = address.trim();
+  if (!trimmed) return {};
+
+  const withZip =
+    /^(.+?),\s*([^,]+?),\s*([A-Za-z]{2})\s+(\d{5})(?:-\d{4})?\s*$/.exec(trimmed);
+  if (withZip) {
+    return {
+      street: withZip[1]!.trim(),
+      city: withZip[2]!.trim(),
+      state_code: withZip[3]!.toUpperCase(),
+      zipcode: withZip[4]!,
+    };
+  }
+
+  const cityState = /^(.+?),\s*([^,]+?),\s*([A-Za-z]{2})\s*$/.exec(trimmed);
+  if (cityState) {
+    return {
+      street: cityState[1]!.trim(),
+      city: cityState[2]!.trim(),
+      state_code: cityState[3]!.toUpperCase(),
+    };
+  }
+
+  return { street: trimmed };
+}
+
 export function buildWhitepagesQueryParams(input: OwnerSearchInput): URLSearchParams | null {
   const name = input.name?.trim() ?? '';
   const region = input.region?.trim() ?? '';
+  const address = input.address?.trim() ?? '';
 
   const hasName = name.length >= 2;
   const hasRegion = region.length >= 2;
-  if (!hasName && !hasRegion) return null;
+  const addrParts = parseAddressInput(address);
+  const hasAddress = Boolean(addrParts.street && addrParts.street.length >= 3);
+  if (!hasName && !hasRegion && !hasAddress) return null;
 
   const params = new URLSearchParams();
   if (hasName) params.set('name', name);
 
-  const { city, state_code } = parseRegionInput(region);
+  const regionParts = parseRegionInput(region);
+  const city = addrParts.city ?? regionParts.city;
+  const state_code = addrParts.state_code ?? regionParts.state_code;
+  if (addrParts.street) params.set('street', addrParts.street);
+  if (addrParts.zipcode) params.set('zipcode', addrParts.zipcode);
   if (city) params.set('city', city);
   if (state_code) params.set('state_code', state_code);
 

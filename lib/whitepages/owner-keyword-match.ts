@@ -17,6 +17,7 @@ const OWNER_MATCH_MODEL =
 export interface OwnerKeywordMatchInput {
   name: string;
   region?: string;
+  address?: string;
   keywords: string;
   candidates: WhitepagesPersonRecord[];
 }
@@ -85,26 +86,28 @@ function candidateSummaryBlock(record: WhitepagesPersonRecord, idx: number): str
 export function buildOwnerKeywordWebQueries(input: {
   name: string;
   region?: string;
+  address?: string;
   keywords: string;
 }): { generalQueries: string[]; peopleQueries: string[]; businessQueries: string[] } {
   const name = quotedIfHasSpace(input.name.trim());
   const keywords = quotedIfHasSpace(input.keywords.trim());
   const region = input.region?.trim() ? quotedIfHasSpace(input.region.trim()) : '';
+  const address = input.address?.trim() ? quotedIfHasSpace(input.address.trim()) : '';
 
   const generalQueries = [
-    [name, keywords, region].filter(Boolean).join(' '),
-    [keywords, 'restaurant owner', region].filter(Boolean).join(' '),
-    [name, keywords, 'restaurant'].filter(Boolean).join(' '),
+    [name, keywords, address, region].filter(Boolean).join(' '),
+    [keywords, address, 'restaurant owner', region].filter(Boolean).join(' '),
+    [name, keywords, address, 'restaurant'].filter(Boolean).join(' '),
   ];
 
   const peopleQueries = [
-    [name, region, keywords].filter(Boolean).join(' '),
-    [name, region, 'phone address'].filter(Boolean).join(' '),
+    [name, region, address, keywords].filter(Boolean).join(' '),
+    [name, address, region, 'phone'].filter(Boolean).join(' '),
   ];
 
   const businessQueries = [
-    [name, keywords].filter(Boolean).join(' '),
-    [keywords, 'owner', region].filter(Boolean).join(' '),
+    [name, keywords, address].filter(Boolean).join(' '),
+    [keywords, address, 'owner', region].filter(Boolean).join(' '),
   ];
 
   const dedup = (arr: string[]) => {
@@ -128,6 +131,7 @@ export function buildOwnerKeywordWebQueries(input: {
 async function collectWebSnippets(input: {
   name: string;
   region?: string;
+  address?: string;
   keywords: string;
   searchOverride?: () => Promise<WebSnippet[]>;
 }): Promise<WebSnippet[]> {
@@ -238,6 +242,7 @@ export async function runOwnerKeywordMatch(
   const snippets = await collectWebSnippets({
     name: input.name,
     region: input.region,
+    address: input.address,
     keywords,
     searchOverride: options.searchOverride,
   });
@@ -263,7 +268,8 @@ export async function runOwnerKeywordMatch(
 
   const user = `【搜索姓名】${input.name}
 【地区】${input.region?.trim() || '—'}
-【匹配关键字（交叉验证用，可含店名/地址/公司/电话/亲属等任意相关信息）】
+【地址】${input.address?.trim() || '—'}
+【匹配关键字（交叉验证用，可含店名/公司/电话/亲属等任意相关信息）】
 ${keywords}
 
 【全网搜索摘要（${snippets.length} 条）】

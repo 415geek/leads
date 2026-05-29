@@ -27,6 +27,7 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}));
     const name = trimField(body.name, 120);
     const region = trimField(body.region, 120);
+    const address = trimField(body.address, 200);
     const keywords = trimField(body.keywords, 200);
 
     if (name.length < 2) {
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const wpResult = await searchWhitepagesOwners(apiKey, { name, region });
+    const wpResult = await searchWhitepagesOwners(apiKey, { name, region, address });
 
     if (keywords.length >= 2 && wpResult.results.length > 0) {
       if (!process.env.ANTHROPIC_API_KEY?.trim()) {
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
       const matchResult = await runOwnerKeywordMatch({
         name,
         region: region || undefined,
+        address: address || undefined,
         keywords,
         candidates: wpResult.results,
       });

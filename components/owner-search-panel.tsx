@@ -243,6 +243,7 @@ export function OwnerSearchPanel() {
   const { t } = useTranslations();
   const [name, setName] = useState('');
   const [region, setRegion] = useState('');
+  const [address, setAddress] = useState('');
   const [keywords, setKeywords] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -282,6 +283,7 @@ export function OwnerSearchPanel() {
         body: JSON.stringify({
           name: name.trim(),
           region: region.trim(),
+          address: address.trim(),
           keywords: keywords.trim(),
         }),
       });
@@ -321,7 +323,7 @@ export function OwnerSearchPanel() {
       </CardHeader>
       <CardContent className="space-y-4">
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <label className="text-xs font-medium text-slate-600">{t.owner_label_name}</label>
               <Input
@@ -339,6 +341,16 @@ export function OwnerSearchPanel() {
                 value={region}
                 onChange={(e) => setRegion(e.target.value)}
                 placeholder={t.owner_placeholder_region}
+                className="mt-1"
+                autoComplete="off"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600">{t.owner_label_address}</label>
+              <Input
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder={t.owner_placeholder_address}
                 className="mt-1"
                 autoComplete="off"
               />
