@@ -45,8 +45,8 @@ describe('buildWhitepagesQueryParams', () => {
   });
 });
 
-describe('searchWhitepagesOwners company filter', () => {
-  it('公司名在服务端过滤 results', async () => {
+describe('searchWhitepagesOwners', () => {
+  it('返回 Whitepages 原始结果', async () => {
     const mockFetch = async () =>
       ({
         ok: true,
@@ -61,12 +61,10 @@ describe('searchWhitepagesOwners company filter', () => {
 
     const out = await searchWhitepagesOwners(
       'test-key',
-      { name: 'John', company: 'Pizza' },
+      { name: 'John', region: 'SF' },
       mockFetch,
     );
-    expect(out.results).toHaveLength(1);
-    expect(out.results[0].id).toBe('P1');
-    expect(out.company_filter_applied).toBe(true);
-    expect(out.total).toBe(1);
+    expect(out.results).toHaveLength(2);
+    expect(out.total).toBe(2);
   });
 });

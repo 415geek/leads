@@ -14,15 +14,12 @@ export interface WhitepagesSearchMetadata {
 export interface OwnerSearchInput {
   name?: string;
   region?: string;
-  company?: string;
 }
 
 export interface OwnerSearchResult {
   total: number;
   results: WhitepagesPersonRecord[];
   metadata: WhitepagesSearchMetadata | null;
-  /** 若用户填了公司名，API 不支持按公司检索，此处标记是否在服务端做了结果过滤 */
-  company_filter_applied: boolean;
 }
 
 const US_STATE_CODES = new Set([
@@ -94,16 +91,6 @@ export function buildWhitepagesQueryParams(input: OwnerSearchInput): URLSearchPa
   return params;
 }
 
-function companyMatches(record: WhitepagesPersonRecord, company: string): boolean {
-  const needle = company.trim().toLowerCase();
-  if (!needle) return true;
-  const cn = record.company_name;
-  if (typeof cn === 'string' && cn.toLowerCase().includes(needle)) return true;
-  const jt = record.job_title;
-  if (typeof jt === 'string' && jt.toLowerCase().includes(needle)) return true;
-  return false;
-}
-
 export async function searchWhitepagesOwners(
   apiKey: string,
   input: OwnerSearchInput,
@@ -136,26 +123,14 @@ export async function searchWhitepagesOwners(
     metadata?: WhitepagesSearchMetadata;
   };
 
-  let results = Array.isArray(json.results) ? json.results : [];
-  const company = input.company?.trim() ?? '';
-  let company_filter_applied = false;
-  if (company.length >= 2) {
-    company_filter_applied = true;
-    results = results.filter((r) => companyMatches(r, company));
-  }
-
+  const results = Array.isArray(json.results) ? json.results : [];
   const meta = json.metadata ?? null;
   const total =
-    company_filter_applied
-      ? results.length
-      : typeof meta?.result_count === 'number'
-        ? meta.result_count
-        : results.length;
+    typeof meta?.result_count === 'number' ? meta.result_count : results.length;
 
   return {
     total,
     results,
     metadata: meta,
-    company_filter_applied,
   };
 }
