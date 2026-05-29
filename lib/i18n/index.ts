@@ -43,8 +43,13 @@ const zh = {
     `当前显示第 ${start}–${end} 条，共 ${loaded} 条`,
   owner_match_score: (score: number) => `Whitepages ${score} 分`,
   owner_keyword_score: (score: number) => `关键字匹配 ${score} 分`,
-  owner_keyword_analysis_note: (model: string, snippets: number) =>
-    `已用 ${model} + 全网搜索（${snippets} 条摘要）完成关键字交叉验证，结果按匹配度排序。`,
+  owner_keyword_analysis_note: (
+    model: string,
+    snippets: number,
+    registry: number,
+    ocCompanies: number,
+  ) =>
+    `已用 ${model} 深度交叉验证：全网 ${snippets} 条 + 政府/OpenCorporates 登记 ${registry} 条${ocCompanies > 0 ? ` + OpenCorporates API ${ocCompanies} 家企业` : ''}，结果按匹配度排序。`,
   owner_web_evidence: '联网依据',
   owner_aliases: '别称',
   owner_work: '职务 / 公司',
@@ -145,8 +150,13 @@ const en: typeof zh = {
     `Showing ${start}–${end} of ${loaded}`,
   owner_match_score: (score: number) => `Whitepages ${score}`,
   owner_keyword_score: (score: number) => `Keyword match ${score}`,
-  owner_keyword_analysis_note: (model: string, snippets: number) =>
-    `Ranked by ${model} + web search (${snippets} snippets) keyword cross-validation.`,
+  owner_keyword_analysis_note: (
+    model: string,
+    snippets: number,
+    registry: number,
+    ocCompanies: number,
+  ) =>
+    `Ranked by ${model} deep cross-validation: ${snippets} web + ${registry} registry/OC snippets${ocCompanies > 0 ? ` + ${ocCompanies} OpenCorporates companies` : ''}.`,
   owner_web_evidence: 'Web evidence',
   owner_aliases: 'Also known as',
   owner_work: 'Role / Company',

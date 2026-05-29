@@ -253,6 +253,10 @@ export function OwnerSearchPanel() {
   const [keywordAnalysisApplied, setKeywordAnalysisApplied] = useState(false);
   const [analysisModel, setAnalysisModel] = useState<string | null>(null);
   const [webSnippetsUsed, setWebSnippetsUsed] = useState<number | null>(null);
+  const [registrySnippetsUsed, setRegistrySnippetsUsed] = useState<number | null>(null);
+  const [opencorporatesCompaniesFound, setOpencorporatesCompaniesFound] = useState<number | null>(
+    null,
+  );
   const [metadata, setMetadata] = useState<WhitepagesSearchMetadata | null>(null);
   const [searched, setSearched] = useState(false);
   const [page, setPage] = useState(1);
@@ -297,6 +301,14 @@ export function OwnerSearchPanel() {
       setKeywordAnalysisApplied(Boolean(json.keyword_analysis_applied));
       setAnalysisModel(typeof json.analysis_model === 'string' ? json.analysis_model : null);
       setWebSnippetsUsed(typeof json.web_snippets_used === 'number' ? json.web_snippets_used : null);
+      setRegistrySnippetsUsed(
+        typeof json.registry_snippets_used === 'number' ? json.registry_snippets_used : null,
+      );
+      setOpencorporatesCompaniesFound(
+        typeof json.opencorporates_companies_found === 'number'
+          ? json.opencorporates_companies_found
+          : null,
+      );
       setMetadata(json.metadata ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : '搜索失败');
@@ -306,6 +318,8 @@ export function OwnerSearchPanel() {
       setKeywordAnalysisApplied(false);
       setAnalysisModel(null);
       setWebSnippetsUsed(null);
+      setRegistrySnippetsUsed(null);
+      setOpencorporatesCompaniesFound(null);
       setMetadata(null);
     } finally {
       setLoading(false);
@@ -392,7 +406,12 @@ export function OwnerSearchPanel() {
               )}
               {keywordAnalysisApplied && (
                 <p className="text-xs text-emerald-800">
-                  {t.owner_keyword_analysis_note(analysisModel ?? 'Claude', webSnippetsUsed ?? 0)}
+                  {t.owner_keyword_analysis_note(
+                    analysisModel ?? 'Claude',
+                    webSnippetsUsed ?? 0,
+                    registrySnippetsUsed ?? 0,
+                    opencorporatesCompaniesFound ?? 0,
+                  )}
                 </p>
               )}
             </div>

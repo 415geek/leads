@@ -68,6 +68,27 @@ describe('runOwnerKeywordMatch', () => {
             source: 'general',
           },
         ],
+        registryEvidenceOverride: async () => ({
+          jurisdiction_code: 'us_ca',
+          opencorporates_companies: [
+            {
+              name: 'Lu Kitchen LLC',
+              jurisdiction_code: 'us_ca',
+              company_number: '123',
+              registered_address: '123 Market St, San Francisco, CA',
+              officers: [{ name: 'Tony Lu', position: 'director' }],
+              opencorporates_url: 'https://opencorporates.com/companies/us_ca/123',
+            },
+          ],
+          opencorporates_prompt: 'Lu Kitchen LLC director Tony Lu',
+          registry_web_snippets: [
+            {
+              title: 'OpenCorporates Lu Kitchen',
+              url: 'https://opencorporates.com/companies/us_ca/123',
+              content: 'Tony Lu listed as director',
+            },
+          ],
+        }),
       },
     );
 
@@ -75,5 +96,7 @@ describe('runOwnerKeywordMatch', () => {
     expect(result.analyses.P2?.keyword_match_score).toBe(88);
     expect(result.analyses.P1?.keyword_match_score).toBe(45);
     expect(result.web_snippets_used).toBe(1);
+    expect(result.registry_snippets_used).toBe(1);
+    expect(result.opencorporates_companies_found).toBe(1);
   });
 });

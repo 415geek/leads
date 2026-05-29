@@ -1,5 +1,5 @@
 /**
- * 老板信息：Whitepages 姓名候选 + 匹配关键字 + Tavily 全网 + Claude Sonnet 交叉验证评分
+ * 老板信息：Whitepages 姓名候选 + 匹配关键字 + OpenCorporates/政府登记 + Tavily + Claude 深度交叉验证
  */
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -10,6 +10,11 @@ import {
 } from '@/lib/intel/deep-person-intel';
 import { formatOwnerRecord } from '@/lib/whitepages/format-record';
 import type { WhitepagesPersonRecord } from '@/lib/whitepages/owner-search';
+import {
+  collectOwnerRegistryEvidence,
+  registrySnippetsBlock,
+  type OwnerRegistryEvidence,
+} from '@/lib/whitepages/owner-registry-evidence';
 
 const OWNER_MATCH_MODEL =
   process.env.ANTHROPIC_OWNER_MATCH_MODEL || 'claude-sonnet-4-20250514';
@@ -36,13 +41,15 @@ export interface OwnerKeywordMatchResult {
   analyses: Record<string, OwnerKeywordAnalysis>;
   results: WhitepagesPersonRecord[];
   web_snippets_used: number;
+  registry_snippets_used: number;
+  opencorporates_companies_found: number;
 }
 
 interface WebSnippet {
   title: string;
   url: string;
   content: string;
-  source: 'general' | 'people_search' | 'business';
+  source: 'general' | 'people_search' | 'business' | 'registry';
 }
 
 function quotedIfHasSpace(v: string): string {
@@ -222,6 +229,7 @@ function normalizeSignals(raw: unknown): string[] {
 export interface RunOwnerKeywordMatchOptions {
   anthropic?: Anthropic;
   searchOverride?: () => Promise<WebSnippet[]>;
+  registryEvidenceOverride?: () => Promise<OwnerRegistryEvidence>;
 }
 
 export async function runOwnerKeywordMatch(
@@ -239,40 +247,68 @@ export async function runOwnerKeywordMatch(
     throw new Error('ANTHROPIC_API_KEY is not configured');
   }
 
-  const snippets = await collectWebSnippets({
-    name: input.name,
-    region: input.region,
-    address: input.address,
-    keywords,
-    searchOverride: options.searchOverride,
-  });
+  const [snippets, registryEvidence] = await Promise.all([
+    collectWebSnippets({
+      name: input.name,
+      region: input.region,
+      address: input.address,
+      keywords,
+      searchOverride: options.searchOverride,
+    }),
+    options.registryEvidenceOverride
+      ? options.registryEvidenceOverride()
+      : collectOwnerRegistryEvidence({
+          name: input.name,
+          region: input.region,
+          address: input.address,
+          keywords,
+        }),
+  ]);
 
-  const evidencePool = snippets.map((s) => ({ title: s.title, url: s.url }));
+  const registrySnippets: WebSnippet[] = registryEvidence.registry_web_snippets.map((s) => ({
+    ...s,
+    source: 'registry' as const,
+  }));
+  const allSnippets = [...snippets, ...registrySnippets];
+
+  const evidencePool = allSnippets.map((s) => ({ title: s.title, url: s.url }));
   const candidateBlocks = input.candidates
     .map((record, idx) => candidateSummaryBlock(record, idx))
     .join('\n\n');
 
-  const system = `你是餐饮 B2B 销售情报专家。任务：根据「匹配关键字」与公开网页证据，对 Whitepages 返回的同名/近似名候选人逐一打分，判断哪一位最可能是目标餐厅老板/经营者。
+  const hasExternalEvidence =
+    allSnippets.length > 0 || registryEvidence.opencorporates_companies.length > 0;
 
-评分规则：
-- keyword_match_score：0-100 整数，表示该候选人与匹配关键字的吻合程度（越高越可能是同一人且与餐饮/店名/地址等线索一致）。
-- 必须交叉验证：Whitepages 结构化字段 + 网页摘要中的店名、地址、职务、媒体报道、LinkedIn、亲属、电话区号等。
-- 若仅有姓名相似但关键字（店名/地址/公司）无任何佐证，分数应 ≤25。
-- 若多个字段（店名+地区+职务等）与关键字和网页证据一致，分数应 ≥75。
-- 同名歧义：在 rationale_zh 说明为何排除其它候选人；matched_signals 列出命中的具体线索（中文短语，每条 ≤40 字）。
-- 无联网摘要时，主要依据 Whitepages 字段与关键字字面/语义匹配，分数上限 55，并在 summary_zh 说明证据有限。
+  const system = `你是餐饮 B2B 销售情报专家。任务：根据「匹配关键字」、OpenCorporates 企业登记、政府 Secretary of State 工商注册信息与公开网页，对 Whitepages 同名/近似名候选人逐一深度交叉验证打分，判断哪一位最可能是目标餐厅老板/经营者。
+
+评分规则（按证据权重）：
+- keyword_match_score：0-100 整数。
+- 高权重（单项可 +25~40）：OpenCorporates 中 officer/director/agent 姓名与候选人一致；政府登记页（CA SOS BizFile、TX SOS 等）显示该人为 LLC/Corp 高管且公司名与关键字一致；注册地址与用户输入地址或 Whitepages 现居地址高度吻合（街道/邮编/城市）。
+- 中权重：全网摘要中的店名、职务、LinkedIn、媒体报道与关键字一致。
+- 低权重：仅姓名相似、地区接近但无公司/店名/地址佐证 → 分数应 ≤25。
+- 若 OpenCorporates officer + 政府登记 + 地址三线一致，分数应 ≥85。
+- 若店名+地区+职务与关键字和网页一致但无登记信息，分数约 65~80。
+- 同名歧义：在 rationale_zh 说明为何排除其它候选人；matched_signals 列出命中的具体线索（中文短语，每条 ≤40 字），优先标注「OpenCorporates」「政府登记」「地址吻合」等来源。
+- 无 OpenCorporates/登记/联网摘要时，主要依据 Whitepages 与关键字字面匹配，分数上限 55。
 
 输出：仅一个 JSON 数组，按输入候选 idx 顺序，每项：
-{"idx":0,"keyword_match_score":82,"summary_zh":"...","rationale_zh":"...","matched_signals":["店名一致","SF 地址吻合"]}
+{"idx":0,"keyword_match_score":82,"summary_zh":"...","rationale_zh":"...","matched_signals":["OpenCorporates 董事一致","CA SOS 登记 Lu Kitchen LLC","Market St 地址吻合"]}
 禁止 markdown，禁止其它文字。`;
 
   const user = `【搜索姓名】${input.name}
 【地区】${input.region?.trim() || '—'}
-【地址】${input.address?.trim() || '—'}
-【匹配关键字（交叉验证用，可含店名/公司/电话/亲属等任意相关信息）】
+【用户输入地址（用于与注册地址/现居地址交叉比对）】
+${input.address?.trim() || '—'}
+【匹配关键字（店名/DBA/公司/电话/亲属等）】
 ${keywords}
 
-【全网搜索摘要（${snippets.length} 条）】
+【OpenCorporates API 企业登记（管辖区 ${registryEvidence.jurisdiction_code}，${registryEvidence.opencorporates_companies.length} 条）】
+${registryEvidence.opencorporates_prompt}
+
+【政府登记 / OpenCorporates 定向网页（${registrySnippets.length} 条）】
+${registrySnippetsBlock(registryEvidence.registry_web_snippets)}
+
+【全网 / 人物 / 商业搜索摘要（${snippets.length} 条）】
 ${snippetsBlock(snippets)}
 
 【Whitepages 候选人（共 ${input.candidates.length} 人）】
@@ -307,7 +343,7 @@ ${candidateBlocks}`;
 
     const record = input.candidates[idx]!;
     const id = candidateId(record, idx);
-    const noSnippets = snippets.length === 0;
+    const noSnippets = !hasExternalEvidence;
     let score = clampPct(row.keyword_match_score);
     if (noSnippets) score = Math.min(score, 55);
 
@@ -326,7 +362,7 @@ ${candidateBlocks}`;
     const id = candidateId(record, idx);
     if (analyses[id]) return;
     analyses[id] = {
-      keyword_match_score: snippets.length === 0 ? 15 : 20,
+      keyword_match_score: !hasExternalEvidence ? 15 : 20,
       summary_zh: '模型未返回该候选评分，建议人工核对。',
       rationale_zh: '自动补全低分占位。',
       matched_signals: [],
@@ -352,5 +388,7 @@ ${candidateBlocks}`;
     analyses,
     results: sorted,
     web_snippets_used: snippets.length,
+    registry_snippets_used: registrySnippets.length,
+    opencorporates_companies_found: registryEvidence.opencorporates_companies.length,
   };
 }

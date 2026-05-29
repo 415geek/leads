@@ -65,6 +65,8 @@ export async function POST(request: Request) {
         analyses: matchResult.analyses,
         analysis_model: matchResult.model,
         web_snippets_used: matchResult.web_snippets_used,
+        registry_snippets_used: matchResult.registry_snippets_used,
+        opencorporates_companies_found: matchResult.opencorporates_companies_found,
         keywords,
       });
     }
