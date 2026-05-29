@@ -9,7 +9,7 @@ function trimField(value: unknown, max = MAX_FIELD_LEN): string {
   return value.trim().slice(0, max);
 }
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 export async function POST(request: Request) {
   try {

@@ -196,26 +196,59 @@ function snippetsBlock(snippets: WebSnippet[]): string {
     .join('\n\n');
 }
 
-function parseScoringJson(text: string): Array<{
+const KEYWORD_MATCH_BATCH_SIZE = 5;
+
+export type OwnerKeywordScoreRow = {
   idx?: unknown;
   id?: unknown;
   keyword_match_score?: unknown;
   summary_zh?: unknown;
   rationale_zh?: unknown;
   matched_signals?: unknown;
-}> | null {
+};
+
+/** 解析 Claude 返回的评分 JSON（容错 markdown、截断数组） */
+export function parseOwnerKeywordMatchJson(text: string): OwnerKeywordScoreRow[] | null {
   const t = text.trim();
   const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const body = fence ? fence[1].trim() : t;
+  const body = (fence ? fence[1] : t).trim();
   const start = body.indexOf('[');
-  const end = body.lastIndexOf(']');
-  if (start < 0 || end < 0 || end <= start) return null;
-  try {
-    const parsed = JSON.parse(body.slice(start, end + 1));
-    return Array.isArray(parsed) ? parsed : null;
-  } catch {
-    return null;
+  if (start < 0) return null;
+
+  const slice = body.slice(start);
+  const tryParse = (json: string): OwnerKeywordScoreRow[] | null => {
+    try {
+      const parsed = JSON.parse(json);
+      return Array.isArray(parsed) ? (parsed as OwnerKeywordScoreRow[]) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const end = slice.lastIndexOf(']');
+  if (end > 0) {
+    const full = tryParse(slice.slice(0, end + 1));
+    if (full) return full;
   }
+
+  // 输出被 max_tokens 截断时，尽量保留已完成的 object
+  let lastBrace = slice.lastIndexOf('}');
+  while (lastBrace > 0) {
+    const repaired = tryParse(`${slice.slice(0, lastBrace + 1)}]`);
+    if (repaired && repaired.length > 0) return repaired;
+    lastBrace = slice.lastIndexOf('}', lastBrace - 1);
+  }
+
+  return null;
+}
+
+function chunkCandidates<T>(items: T[], size: number): T[][] {
+  if (items.length <= size) return [items];
+  const batches: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    batches.push(items.slice(i, i + size));
+  }
+  return batches;
 }
 
 function normalizeSignals(raw: unknown): string[] {
@@ -272,9 +305,6 @@ export async function runOwnerKeywordMatch(
   const allSnippets = [...snippets, ...registrySnippets];
 
   const evidencePool = allSnippets.map((s) => ({ title: s.title, url: s.url }));
-  const candidateBlocks = input.candidates
-    .map((record, idx) => candidateSummaryBlock(record, idx))
-    .join('\n\n');
 
   const hasExternalEvidence =
     allSnippets.length > 0 || registryEvidence.opencorporates_companies.length > 0;
@@ -291,11 +321,11 @@ export async function runOwnerKeywordMatch(
 - 同名歧义：在 rationale_zh 说明为何排除其它候选人；matched_signals 列出命中的具体线索（中文短语，每条 ≤40 字），优先标注「OpenCorporates」「政府登记」「地址吻合」等来源。
 - 无 OpenCorporates/登记/联网摘要时，主要依据 Whitepages 与关键字字面匹配，分数上限 55。
 
-输出：仅一个 JSON 数组，按输入候选 idx 顺序，每项：
-{"idx":0,"keyword_match_score":82,"summary_zh":"...","rationale_zh":"...","matched_signals":["OpenCorporates 董事一致","CA SOS 登记 Lu Kitchen LLC","Market St 地址吻合"]}
-禁止 markdown，禁止其它文字。`;
+输出：仅一个 JSON 数组，按输入候选 idx 顺序，每项字段尽量简短：
+{"idx":0,"keyword_match_score":82,"summary_zh":"≤50字","rationale_zh":"≤80字","matched_signals":["OpenCorporates 董事一致","地址吻合"]}
+禁止 markdown，禁止其它文字，禁止在 JSON 外添加解释。`;
 
-  const user = `【搜索姓名】${input.name}
+  const sharedContext = `【搜索姓名】${input.name}
 【地区】${input.region?.trim() || '—'}
 【用户输入地址（用于与注册地址/现居地址交叉比对）】
 ${input.address?.trim() || '—'}
@@ -309,28 +339,61 @@ ${registryEvidence.opencorporates_prompt}
 ${registrySnippetsBlock(registryEvidence.registry_web_snippets)}
 
 【全网 / 人物 / 商业搜索摘要（${snippets.length} 条）】
-${snippetsBlock(snippets)}
-
-【Whitepages 候选人（共 ${input.candidates.length} 人）】
-${candidateBlocks}`;
+${snippetsBlock(snippets)}`;
 
   const client =
     options.anthropic ?? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-  const message = await client.messages.create({
-    model: OWNER_MATCH_MODEL,
-    max_tokens: Math.max(1200, input.candidates.length * 120),
-    system,
-    messages: [{ role: 'user', content: user }],
-  });
+  async function requestScores(
+    batch: WhitepagesPersonRecord[],
+    idxOffset: number,
+    compact: boolean,
+  ): Promise<OwnerKeywordScoreRow[]> {
+    const blocks = batch
+      .map((record, localIdx) => candidateSummaryBlock(record, idxOffset + localIdx))
+      .join('\n\n');
+    const user = `${sharedContext}
 
-  const block = message.content[0];
-  if (!block || block.type !== 'text') {
-    throw new Error('Unexpected response format from Claude');
+【本批 Whitepages 候选人（idx ${idxOffset}–${idxOffset + batch.length - 1}，共 ${batch.length} 人）】
+${blocks}
+
+必须为上述每一位输出一条评分，idx 使用方括号中的全局编号。`;
+
+    const message = await client.messages.create({
+      model: OWNER_MATCH_MODEL,
+      max_tokens: compact
+        ? Math.min(4096, Math.max(800, batch.length * 100))
+        : Math.min(8192, Math.max(1500, batch.length * 220)),
+      system: compact
+        ? `${system}\n\n再次强调：summary_zh≤40字，rationale_zh≤60字，只输出 JSON 数组。`
+        : system,
+      messages: [{ role: 'user', content: user }],
+    });
+
+    const block = message.content[0];
+    if (!block || block.type !== 'text') {
+      throw new Error('Unexpected response format from Claude');
+    }
+
+    const parsed = parseOwnerKeywordMatchJson(block.text);
+    if (parsed && parsed.length > 0) return parsed;
+
+    if (!compact) {
+      return requestScores(batch, idxOffset, true);
+    }
+    return [];
   }
 
-  const parsedRows = parseScoringJson(block.text);
-  if (!parsedRows) {
+  const batches = chunkCandidates(input.candidates, KEYWORD_MATCH_BATCH_SIZE);
+  const parsedRows: OwnerKeywordScoreRow[] = [];
+  let idxOffset = 0;
+  for (const batch of batches) {
+    const rows = await requestScores(batch, idxOffset, false);
+    parsedRows.push(...rows);
+    idxOffset += batch.length;
+  }
+
+  if (parsedRows.length === 0) {
     throw new Error('Failed to parse keyword match JSON from model');
   }
 

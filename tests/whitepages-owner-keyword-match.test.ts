@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   buildOwnerKeywordWebQueries,
+  parseOwnerKeywordMatchJson,
   runOwnerKeywordMatch,
 } from '@/lib/whitepages/owner-keyword-match';
 
@@ -14,6 +15,24 @@ describe('buildOwnerKeywordWebQueries', () => {
     expect(q.generalQueries[0]).toContain('Tony Lu');
     expect(q.generalQueries[0]).toContain('Lu Kitchen');
     expect(q.peopleQueries[0]).toContain('San Francisco');
+  });
+});
+
+describe('parseOwnerKeywordMatchJson', () => {
+  it('解析 markdown 代码块', () => {
+    const rows = parseOwnerKeywordMatchJson(
+      '```json\n[{"idx":0,"keyword_match_score":70,"summary_zh":"ok","rationale_zh":"r","matched_signals":[]}]\n```',
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows?.[0]?.keyword_match_score).toBe(70);
+  });
+
+  it('修复被截断的 JSON 数组', () => {
+    const rows = parseOwnerKeywordMatchJson(
+      '[{"idx":0,"keyword_match_score":60,"summary_zh":"a","rationale_zh":"b","matched_signals":[]},{"idx":1,"keyword_match_score":80,"summary_zh":"c","rationale_zh":"d","matched_signals":["x"]',
+    );
+    expect(rows?.length).toBeGreaterThanOrEqual(1);
+    expect(rows?.[0]?.keyword_match_score).toBe(60);
   });
 });
 
