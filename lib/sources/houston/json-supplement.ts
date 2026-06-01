@@ -9,6 +9,10 @@ import {
   matchesHoustonRestaurantKeyword,
 } from '@/lib/houston-opening-intel';
 import { pickText, snapshotSourceRaw } from '@/lib/bay-area-food-import/shared';
+import {
+  isHoustonPermitWorkDescription,
+  resolveHoustonPermitLeadName,
+} from '@/lib/houston-permit-naming';
 import type { MetroArea, NormalizedDraft } from '../types';
 
 export function pickStr(row: Record<string, unknown>, keys: string[]): string | null {
@@ -82,26 +86,53 @@ export interface HoustonJsonDraftOptions {
 }
 
 export function rowToHoustonRestaurantDraft(opts: HoustonJsonDraftOptions): NormalizedDraft | null {
-  const name = pickStr(opts.row, opts.nameKeys) ?? '';
+  const rawName = pickStr(opts.row, opts.nameKeys) ?? '';
+  const address = pickStr(opts.row, opts.addressKeys ?? ['address', 'street', 'location']);
+  const comments = pickStr(opts.row, [
+    'comments',
+    'description',
+    'notes',
+    'work_description',
+    'scope',
+  ]);
+  const fileNum = opts.idKeys ? pickStr(opts.row, opts.idKeys) : null;
+
+  const name = resolveHoustonPermitLeadName({
+    candidateName: rawName,
+    comments,
+    address,
+    projectNo: fileNum,
+  });
+
   if (name.length < 2) return null;
+  if (isHoustonPermitWorkDescription(rawName) && !address) return null;
 
   if (opts.requireRestaurantKeyword !== false) {
     if (matchesHoustonNonFoodExclusion(name)) return null;
-    const { ok: kwOk, hits } = matchesHoustonRestaurantKeyword(name);
+    const probeText = [rawName, comments, name].filter(Boolean).join(' ');
+    const { ok: kwOk, hits } = matchesHoustonRestaurantKeyword(probeText);
     if (!kwOk) return null;
     if (isLikelyHoustonChainName(name)) return null;
     opts.houston_opening = { ...opts.houston_opening, keyword_hits: hits };
   } else if (isLikelyHoustonChainName(name)) {
     return null;
+  } else {
+    const foodProbe = [
+      comments,
+      rawName,
+      pickStr(opts.row, ['permit_type', 'type', 'record_type', 'description']),
+    ]
+      .filter(Boolean)
+      .join(' ');
+    const { ok: foodOk } = matchesHoustonRestaurantKeyword(foodProbe);
+    if (!foodOk) return null;
   }
 
   const owner = opts.ownerKeys ? pickStr(opts.row, opts.ownerKeys) : null;
-  const address = pickStr(opts.row, opts.addressKeys ?? ['address', 'street', 'location']);
   const city = pickStr(opts.row, opts.cityKeys ?? ['city']) || opts.defaultCity || 'Houston';
   const filed = toIsoDate(pickStr(opts.row, opts.dateKeys));
   if (filed && filed < opts.since) return null;
 
-  const fileNum = opts.idKeys ? pickStr(opts.row, opts.idKeys) : null;
   const external_id =
     fileNum ?? `${opts.idPrefix}_${name.slice(0, 40)}_${(address || '').slice(0, 24)}`;
 

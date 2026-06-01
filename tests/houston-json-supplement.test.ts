@@ -64,4 +64,34 @@ describe('houston json-supplement', () => {
     expect(draft!.name).toBe('Dragon Noodle Kitchen');
     expect(pickStr({ business_name: 'x' }, ['business_name'])).toBe('x');
   });
+
+  it('rowToHoustonRestaurantDraft renames permit work project_name to address label', () => {
+    const draft = rowToHoustonRestaurantDraft({
+      sourceId: 'houston_permit_portal',
+      row: {
+        project_name: 'RESTAURANT REMODEL 1-1-2-A2-B',
+        comments: 'RESTAURANT REMODEL 1-1-2-A2-B',
+        address: '7675 CLAREWOOD DR',
+        city: 'Houston',
+        permit_date: '2026-04-01',
+        permit_number: '250001',
+      },
+      since: '2026-01-01',
+      nameKeys: ['project_name', 'business_name'],
+      addressKeys: ['address'],
+      dateKeys: ['permit_date'],
+      idKeys: ['permit_number'],
+      idPrefix: 'hpc',
+      cuisineLabel: 'Houston Permit',
+      licenseType: 'Building Permit',
+      requireRestaurantKeyword: false,
+      houston_opening: {
+        display_status: 'pre-opening',
+        display_source: 'Building Permit',
+        confidence_score: 'MEDIUM',
+      },
+    });
+    expect(draft).not.toBeNull();
+    expect(draft!.name).toBe('New food service · 7675 CLAREWOOD DR');
+  });
 });

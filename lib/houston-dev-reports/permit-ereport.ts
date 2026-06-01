@@ -10,12 +10,15 @@ import * as XLSX from 'xlsx';
 import { calculateLeadScore } from '@/lib/scoring';
 import type { Lead } from '@/types/lead';
 import {
-  buildCuisineLabel,
   pickText,
   snapshotSourceRaw,
   type FoodLeadDraft,
   type SourceFetchResult,
 } from '@/lib/bay-area-food-import/shared';
+import {
+  inferHoustonPermitCuisineLabel,
+  resolveHoustonPermitLeadName,
+} from '@/lib/houston-permit-naming';
 
 export const HOUSTON_PERMIT_EREPORT_SOURCE_ID = 'houston_permit_ereport';
 export const HOUSTON_DEV_REPORTS_ARCHIVE_URL =
@@ -96,12 +99,12 @@ function permitDateIso(v: unknown): string | null {
 }
 
 function buildLeadName(comments: string, projectNo: string, address: string | null): string {
-  const c = comments.trim();
-  const first = c.split(/[.·]/)[0]?.trim() ?? '';
-  if (first.length >= 8) return first.slice(0, 120);
-  const addr = (address ?? '').trim();
-  if (addr) return `Permit ${projectNo} · ${addr}`.slice(0, 120);
-  return `Houston permit ${projectNo}`.slice(0, 120);
+  return resolveHoustonPermitLeadName({
+    candidateName: comments.split(/[.·]/)[0]?.trim() ?? comments,
+    comments,
+    address,
+    projectNo,
+  });
 }
 
 function projectNoKey(row: Record<string, unknown>): string | null {
@@ -200,14 +203,11 @@ export async function fetchHoustonPermitEreportLeads(opts: {
           name,
           address: addrLine.length ? addrLine : null,
           phone: null,
-          cuisine_type: buildCuisineLabel({
-            licLine: [permitType, comments].filter(Boolean).join(' · '),
-            businessName: name,
-          }),
+          cuisine_type: inferHoustonPermitCuisineLabel(comments, permitType),
           city: 'Houston',
           source: id,
           license_date: licenseDate,
-          license_type: [permitType, building].filter(Boolean).join(' · ') || null,
+          license_type: [permitType, comments, building].filter(Boolean).join(' · ') || null,
           source_raw: snapshotSourceRaw({
             ...row,
             _ereport_file_url: xlsxUrl,
