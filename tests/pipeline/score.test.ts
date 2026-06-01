@@ -165,6 +165,35 @@ describe('scoreDraft (scoreV3)', () => {
     expect(base - noIntel).toBe(10);
   });
 
+  it('applies NYC Pre-permit bonus via nyc_opening', () => {
+    const base = scoreDraft({
+      draft: makeDraft({
+        license_date: daysAgoISO(3),
+        metro_area: 'nyc',
+        nyc_opening: {
+          inspection_type: 'Pre-permit (Non-operational) / Initial Inspection',
+          category: 'pre_permit_non_operational',
+          phase: 'initial',
+          priority_rank: 1,
+          new_opening_label: 'confirmed_new_opening',
+          lead_value: 'high',
+          display_status: '发证前检查（未营业）/ 初检',
+          display_source: 'NYC DOHMH Inspection',
+          confidence_score: 'HIGH',
+          is_pre_permit: true,
+        },
+      }),
+      confidence: 1.0,
+      hasEnrichment: false,
+    });
+    const noIntel = scoreDraft({
+      draft: makeDraft({ license_date: daysAgoISO(3), metro_area: 'nyc' }),
+      confidence: 1.0,
+      hasEnrichment: false,
+    });
+    expect(base - noIntel).toBe(10);
+  });
+
   it('adds +5 for phone (scoreV3 weight)', () => {
     const withPhone = scoreDraft({
       draft: makeDraft({ phone: '415-555-1234' }),

@@ -23,6 +23,16 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { dashboardBusinessSearchHref } from '@/lib/dashboard-business-search';
 import type { OpeningIntelWebPayload } from '@/lib/opening-intel-web';
+import type { NycOpeningIntel } from '@/lib/nyc-opening-intel';
+
+function readNycOpeningIntel(lead: Lead): NycOpeningIntel | null {
+  const cls = lead.ai_classification;
+  if (!cls || typeof cls !== 'object') return null;
+  const raw = (cls as Record<string, unknown>).nyc_opening;
+  if (!raw || typeof raw !== 'object') return null;
+  const intel = raw as NycOpeningIntel;
+  return intel.display_status ? intel : null;
+}
 
 function displayOrDash(value: string | null | undefined): string {
   if (value === null || value === undefined) return '—';
@@ -263,6 +273,31 @@ export default function LeadDetailPage({
 
       <SfRegistrationSummary sourceRaw={lead.source_raw} />
 
+      {(() => {
+        const nyc = readNycOpeningIntel(lead);
+        if (!nyc) return null;
+        const highValue = nyc.lead_value === 'high';
+        return (
+          <Card className={highValue ? 'border-sky-200 bg-sky-50/40' : undefined}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">NYC DOHMH 检查类型</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <p className="font-medium text-slate-900">{nyc.display_status}</p>
+              <p className="text-xs text-muted-foreground">{nyc.inspection_type}</p>
+              <div className="flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full bg-white px-2.5 py-0.5 font-medium text-sky-900 ring-1 ring-sky-200">
+                  置信 {nyc.confidence_score}
+                </span>
+                <span className="rounded-full bg-white px-2.5 py-0.5 font-medium text-slate-700 ring-1 ring-slate-200">
+                  线索价值 {nyc.lead_value === 'high' ? '高' : nyc.lead_value === 'medium' ? '中' : '低'}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
           <CardTitle>联网情报（新开 / 转手）</CardTitle>
@@ -369,7 +404,7 @@ export default function LeadDetailPage({
                   ['city', '城市', lead.city, false],
                   ['source', '数据来源', lead.source, false],
                   ['license_date', '执照 / 开业相关日期', displayOrDash(lead.license_date), false],
-                  ['license_type', '执照类型说明', displayOrDash(lead.license_type), false],
+                  ['license_type', lead.source === 'nyc_dohmh' ? 'DOHMH 检查类型' : '执照类型说明', displayOrDash(lead.license_type), false],
                   [
                     'ca_entity_number',
                     'CA 实体编号（SOS）',

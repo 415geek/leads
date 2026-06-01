@@ -35,7 +35,7 @@ export const METRO_CONFIGS: readonly MetroConfig[] = [
   },
   {
     id: 'nyc',
-    label: '纽约（DOHMH Restaurant Inspections）',
+    label: '纽约（DOHMH · Pre-permit 新店检查 · 90 天）',
     shortLabel: '纽约',
     cities: ['Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island'],
     openDataUrl: 'https://data.cityofnewyork.us/',

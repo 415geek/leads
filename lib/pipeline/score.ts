@@ -62,7 +62,7 @@ type OpeningLabel =
   | 'weak_signal';
 
 function openingSignalBonus(draft: NormalizedDraft): number {
-  const signals = draft.opening_signals ?? draft.houston_opening;
+  const signals = draft.opening_signals ?? draft.houston_opening ?? draft.nyc_opening;
   if (!signals) return 0;
 
   const label =

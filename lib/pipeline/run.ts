@@ -165,6 +165,7 @@ export async function runPipeline(
     const mergedCls: Record<string, unknown> = { ...(cls ?? {}) };
     if (e.draft.opening_signals) mergedCls.datasf_opening = e.draft.opening_signals;
     if (e.draft.houston_opening) mergedCls.houston_opening = e.draft.houston_opening;
+    if (e.draft.nyc_opening) mergedCls.nyc_opening = e.draft.nyc_opening;
     if (
       e.draft.houston_opening?.display_status === 'pre-opening' &&
       e.enrichment?.business_status === 'OPERATIONAL'

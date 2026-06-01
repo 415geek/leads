@@ -121,6 +121,9 @@ function leadContextBlock(lead: Lead): string {
   if (isRecord(cls) && isRecord(cls.datasf_opening)) {
     parts.push(`已缓存 datasf_opening: ${JSON.stringify(cls.datasf_opening)}`);
   }
+  if (isRecord(cls) && isRecord(cls.nyc_opening)) {
+    parts.push(`NYC DOHMH inspection_type 规则层: ${JSON.stringify(cls.nyc_opening)}`);
+  }
 
   return parts.join('\n');
 }
