@@ -71,7 +71,7 @@ function toIsoDate(raw: string | null): string | null {
 
 export const txSosHoustonSupplementSource: FoodDataSource = {
   id: SOURCE_ID,
-  label: 'Texas SOS · Business entity（TX_SOS_HOUSTON_JSON_URL 补充）',
+  label: 'Texas SOSDirect · Business entity（TX_SOS_HOUSTON_JSON_URL 补充）',
   metro: 'houston',
   state: 'TX',
   kind: 'registration',
@@ -147,7 +147,7 @@ export const txSosHoustonSupplementSource: FoodDataSource = {
 
         const houston_opening: HoustonOpeningIntel = {
           display_status: 'entity registered',
-          display_source: 'TX SOS',
+          display_source: 'TX SOSDirect',
           confidence_score: 'LOW',
           keyword_hits: hits,
         };

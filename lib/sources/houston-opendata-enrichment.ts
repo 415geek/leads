@@ -1,11 +1,8 @@
 /**
- * Houston HDHHS Last Facility Inspection adapter
+ * Houston Open Data — 批量补全（HDHHS 检查历史 / CKAN datastore）
  *
- * kind: inspection —— 对 inspection 类数据源，license_date = inspection_date（最早那次近似"首检日"）。
- * 当前底层 fetch 返回的是"最近一次"检查日（按 INSPECTION DATE DESC 取 TOP），所以 first_inspection_date
- * 暂以同一字段填入；待 Phase 3 加入历史拉取后再按 MIN(inspection_date) 纠正。
- *
- * external_id：HDHHS 行内没有稳定业务 ID，用 (name + address) 组合 hash 作为兜底。
+ * 优先级 #8：用于 enrich / 补全地址与 PE#，不作为新开业主信号。
+ * 与 houston_hdhhs 共用底层 fetch，但独立 source id 便于合并优先级控制。
  */
 
 import { fetchHoustonFoodLeads } from '@/lib/houston-food-import/houston';
@@ -16,24 +13,25 @@ import {
   matchesHoustonRestaurantKeyword,
 } from '@/lib/houston-opening-intel';
 
+const SOURCE_ID = 'houston_opendata_enrichment';
+
 function stableId(name: string, address: string | null): string {
   const s = `${name.toLowerCase()}|${(address || '').toLowerCase()}`;
-  // 简单哈希（不需要密码学安全），只为 external_id 稳定
   let h = 0;
   for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
-  return `hou_${Math.abs(h)}`;
+  return `hou_od_${Math.abs(h)}`;
 }
 
-export const houstonSource: FoodDataSource = {
-  id: 'houston_hdhhs',
-  label: 'Houston data.houstontx.gov · HDHHS Last Facility Inspection（CKAN datastore SQL）',
+export const houstonOpendataEnrichmentSource: FoodDataSource = {
+  id: SOURCE_ID,
+  label: 'Houston Open Data · HDHHS 批量补全（data.houstontx.gov CKAN）',
   metro: 'houston',
   state: 'TX',
   kind: 'inspection',
   portalUrl: 'https://data.houstontx.gov/',
   rateLimit: { rps: 2 },
-  /** 已由 houston_opendata_enrichment 接管；保留 id 兼容历史 leads.source */
-  enabled: false,
+  enabled: true,
+  lookbackDays: 730,
 
   async fetchAndNormalize(opts) {
     const { result, leads } = await fetchHoustonFoodLeads();
@@ -63,23 +61,25 @@ export const houstonSource: FoodDataSource = {
         cuisine_type: l.cuisine_type,
         city: l.city,
         metro_area: 'houston',
-        source: l.source,
+        source: SOURCE_ID,
         license_date: l.license_date,
-        // inspection 类：first_inspection_date 由 pipeline 侧累积；本次先填当前 inspection 日
         first_inspection_date: l.license_date,
         license_type: l.license_type,
-        source_raw: l.source_raw,
+        source_raw: { ...l.source_raw, _enrichment: true },
         lead_status: 'new',
         houston_opening: {
           display_status: 'health_inspection_facility',
-          display_source: 'HDHHS Inspection',
-          confidence_score: 'MEDIUM',
+          display_source: 'Open Data Enrichment',
+          confidence_score: 'LOW',
           keyword_hits: nameKw.ok ? nameKw.hits : undefined,
         },
       });
     }
     const adjustedResult =
       drafts.length !== leads.length ? { ...result, fetched: drafts.length } : { ...result };
-    return { result: adjustedResult, drafts };
+    return {
+      result: { ...adjustedResult, id: SOURCE_ID, label: houstonOpendataEnrichmentSource.label },
+      drafts,
+    };
   },
 };

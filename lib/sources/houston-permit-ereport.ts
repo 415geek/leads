@@ -22,7 +22,8 @@ export const houstonPermitEreportSource: FoodDataSource = {
   kind: 'permit',
   portalUrl: HOUSTON_DEV_REPORTS_ARCHIVE_URL,
   rateLimit: { rps: 0.25 },
-  enabled: true,
+  /** 已并入 houston_permit_portal（eReport 回退）；保留 id 兼容历史数据 */
+  enabled: false,
   /**
    * Houston Planning 的 archive 自 2025-12-01 之后没有再发布新的 weekly xlsx
    * （核查日期 2026-05-26）。为了把 2025 后半年遗留的有效数据拉进系统，

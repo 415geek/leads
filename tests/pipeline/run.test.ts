@@ -14,7 +14,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { runPipeline } from '@/lib/pipeline/run';
 import { sanFranciscoSource } from '@/lib/sources/san-francisco';
-import { houstonSource } from '@/lib/sources/houston';
+import { houstonOpendataEnrichmentSource } from '@/lib/sources/houston-opendata-enrichment';
 import { berkeleySource } from '@/lib/sources/berkeley';
 import type { NormalizedDraft } from '@/lib/sources/types';
 
@@ -46,7 +46,7 @@ function houstonDraft(overrides: Partial<NormalizedDraft> = {}): NormalizedDraft
     cuisine_type: '餐饮',
     city: 'Houston',
     metro_area: 'houston',
-    source: 'houston_hdhhs',
+    source: 'houston_opendata_enrichment',
     license_date: '2026-04-01',
     first_inspection_date: '2026-04-01',
     license_type: 'Restaurant',
@@ -63,7 +63,7 @@ describe('runPipeline', () => {
 
   beforeEach(() => {
     sfSpy = vi.spyOn(sanFranciscoSource, 'fetchAndNormalize');
-    huSpy = vi.spyOn(houstonSource, 'fetchAndNormalize');
+    huSpy = vi.spyOn(houstonOpendataEnrichmentSource, 'fetchAndNormalize');
     brkSpy = vi.spyOn(berkeleySource, 'fetchAndNormalize');
   });
 
@@ -83,11 +83,11 @@ describe('runPipeline', () => {
       drafts: [],
     });
     huSpy.mockResolvedValue({
-      result: { id: 'houston_hdhhs', label: 'hou', ok: true, fetched: 0 },
+      result: { id: 'houston_opendata_enrichment', label: 'hou', ok: true, fetched: 0 },
       drafts: [],
     });
 
-    const res = await runPipeline({ sourceIds: ['sf_gov', 'berkeley_open_data', 'houston_hdhhs'] });
+    const res = await runPipeline({ sourceIds: ['sf_gov', 'berkeley_open_data', 'houston_opendata_enrichment'] });
     expect(res.leads).toHaveLength(2);
     expect(res.droppedNonRestaurant).toBe(0);
     expect(res.enrichmentCalls).toBe(0);
@@ -106,14 +106,14 @@ describe('runPipeline', () => {
       drafts: [],
     });
     huSpy.mockResolvedValue({
-      result: { id: 'houston_hdhhs', label: 'hou', ok: true, fetched: 1 },
+      result: { id: 'houston_opendata_enrichment', label: 'hou', ok: true, fetched: 1 },
       drafts: [houstonDraft()],
     });
 
-    const res = await runPipeline({ sourceIds: ['sf_gov', 'berkeley_open_data', 'houston_hdhhs'] });
+    const res = await runPipeline({ sourceIds: ['sf_gov', 'berkeley_open_data', 'houston_opendata_enrichment'] });
     expect(res.leads).toHaveLength(2);
     const sf = res.leads.find((l) => l.source === 'sf_gov');
-    const hu = res.leads.find((l) => l.source === 'houston_hdhhs');
+    const hu = res.leads.find((l) => l.source === 'houston_opendata_enrichment');
     expect(sf!.lead_score).toBeGreaterThan(0);
     expect(hu!.lead_score).toBeGreaterThan(0);
     // sf 有电话 + 都会权重 1.0；houston 无电话 + 权重 0.67 —— sf 应该分更高
@@ -143,7 +143,7 @@ describe('runPipeline', () => {
       drafts: [],
     });
     huSpy.mockResolvedValue({
-      result: { id: 'houston_hdhhs', label: 'hou', ok: true, fetched: 1 },
+      result: { id: 'houston_opendata_enrichment', label: 'hou', ok: true, fetched: 1 },
       drafts: [houstonDraft()],
     });
     brkSpy.mockResolvedValue({
@@ -151,14 +151,14 @@ describe('runPipeline', () => {
       drafts: [],
     });
 
-    const res = await runPipeline({ singleSourceId: 'houston_hdhhs' });
+    const res = await runPipeline({ singleSourceId: 'houston_opendata_enrichment' });
 
     // Only houston should have been called
     expect(huSpy).toHaveBeenCalledTimes(1);
     expect(sfSpy).not.toHaveBeenCalled();
     expect(brkSpy).not.toHaveBeenCalled();
     expect(res.leads).toHaveLength(1);
-    expect(res.leads[0].source).toBe('houston_hdhhs');
+    expect(res.leads[0].source).toBe('houston_opendata_enrichment');
   });
 
   it('skipClassify=true bypasses classifier (default for interactive import)', async () => {
@@ -193,11 +193,11 @@ describe('runPipeline', () => {
       ],
     });
     huSpy.mockResolvedValue({
-      result: { id: 'houston_hdhhs', label: 'hou', ok: true, fetched: 0 },
+      result: { id: 'houston_opendata_enrichment', label: 'hou', ok: true, fetched: 0 },
       drafts: [],
     });
 
-    const res = await runPipeline({ sourceIds: ['sf_gov', 'berkeley_open_data', 'houston_hdhhs'] });
+    const res = await runPipeline({ sourceIds: ['sf_gov', 'berkeley_open_data', 'houston_opendata_enrichment'] });
     expect(res.leads).toHaveLength(1);
     const sfResult = res.sourceResults.find((r) => r.id === 'sf_gov');
     expect(sfResult?.ok).toBe(false);

@@ -1,0 +1,67 @@
+import { describe, it, expect } from 'vitest';
+import {
+  isHoustonMetroCity,
+  pickStr,
+  rowToHoustonRestaurantDraft,
+  toIsoDate,
+} from '@/lib/sources/houston/json-supplement';
+
+describe('houston json-supplement', () => {
+  it('toIsoDate parses US and ISO dates', () => {
+    expect(toIsoDate('2026-03-01')).toBe('2026-03-01');
+    expect(toIsoDate('3/1/2026')).toBe('2026-03-01');
+  });
+
+  it('isHoustonMetroCity accepts Harris county', () => {
+    expect(isHoustonMetroCity('Tomball', 'Harris')).toBe(true);
+    expect(isHoustonMetroCity('Dallas', 'Dallas')).toBe(false);
+  });
+
+  it('rowToHoustonRestaurantDraft filters non-restaurant names', () => {
+    const draft = rowToHoustonRestaurantDraft({
+      sourceId: 'test',
+      row: { name: 'Acme Logistics LLC', address: '1 Main', filed_date: '2026-04-01' },
+      since: '2026-01-01',
+      nameKeys: ['name'],
+      dateKeys: ['filed_date'],
+      idPrefix: 't',
+      cuisineLabel: 'Test',
+      licenseType: 'Test',
+      houston_opening: {
+        display_status: 'pre-opening',
+        display_source: 'Test',
+        confidence_score: 'LOW',
+      },
+    });
+    expect(draft).toBeNull();
+  });
+
+  it('rowToHoustonRestaurantDraft accepts restaurant keyword', () => {
+    const draft = rowToHoustonRestaurantDraft({
+      sourceId: 'houston_health_food_permit',
+      row: {
+        business_name: 'Dragon Noodle Kitchen',
+        address: '100 Main St',
+        city: 'Houston',
+        issue_date: '2026-04-01',
+        permit_number: 'PE-99',
+      },
+      since: '2026-01-01',
+      nameKeys: ['business_name'],
+      addressKeys: ['address'],
+      dateKeys: ['issue_date'],
+      idKeys: ['permit_number'],
+      idPrefix: 'hfd',
+      cuisineLabel: 'Food Permit',
+      licenseType: 'Food',
+      houston_opening: {
+        display_status: 'opening soon',
+        display_source: 'Food Permit',
+        confidence_score: 'HIGH',
+      },
+    });
+    expect(draft).not.toBeNull();
+    expect(draft!.name).toBe('Dragon Noodle Kitchen');
+    expect(pickStr({ business_name: 'x' }, ['business_name'])).toBe('x');
+  });
+});

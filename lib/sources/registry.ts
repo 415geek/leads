@@ -14,9 +14,14 @@ import { sanFranciscoSource } from './san-francisco';
 import { berkeleySource } from './berkeley';
 import { houstonSource } from './houston';
 import { houstonPermitEreportSource } from './houston-permit-ereport';
+import { houstonPermitPortalSource } from './houston-permit-portal';
+import { houstonHealthFoodPermitSource } from './houston-health-food-permit';
+import { houstonTabcSource } from './houston-tabc';
+import { houstonComptrollerSalesTaxSource } from './houston-comptroller-sales-tax';
+import { houstonOboCertifiedSource } from './houston-obo-certified';
+import { houstonOpendataEnrichmentSource } from './houston-opendata-enrichment';
 import { harrisCountyDbaSource } from './harris-county-dba';
 import { txSosHoustonSupplementSource } from './tx-sos-houston-supplement';
-import { houstonHealthFoodPermitPlaceholderSource } from './houston-health-food-permit-placeholder';
 import { nycSource } from './nyc';
 import { chicagoSource } from './chicago';
 import { austinSource } from './austin';
@@ -27,11 +32,16 @@ import { bostonSource } from './boston';
 export const SOURCE_REGISTRY: readonly FoodDataSource[] = [
   sanFranciscoSource,
   berkeleySource,
+  houstonPermitPortalSource,
+  houstonHealthFoodPermitSource,
+  houstonTabcSource,
+  houstonComptrollerSalesTaxSource,
+  txSosHoustonSupplementSource,
+  harrisCountyDbaSource,
+  houstonOboCertifiedSource,
+  houstonOpendataEnrichmentSource,
   houstonSource,
   houstonPermitEreportSource,
-  harrisCountyDbaSource,
-  txSosHoustonSupplementSource,
-  houstonHealthFoodPermitPlaceholderSource,
   nycSource, // enabled
   chicagoSource, // enabled
   austinSource, // enabled

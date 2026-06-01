@@ -59,20 +59,20 @@ describe('mergeHoustonCrossSourceLeads', () => {
     };
   }
 
-  it('merges DBA into HDHHS when address matches and names similar', () => {
+  it('merges DBA into Health Food Permit when address matches and names similar', () => {
     const dba = base({
       source: 'harris_county_dba',
       external_id: 'dba-1',
     });
-    const hdhhs = base({
-      source: 'houston_hdhhs',
+    const health = base({
+      source: 'houston_health_food_permit',
       external_id: 'pe-9',
       name: 'Taco Libre',
       address: '100 Main St',
     });
-    const out = mergeHoustonCrossSourceLeads([dba, hdhhs]);
+    const out = mergeHoustonCrossSourceLeads([dba, health]);
     expect(out).toHaveLength(1);
-    expect(out[0].source).toBe('houston_hdhhs');
+    expect(out[0].source).toBe('houston_health_food_permit');
     const cls = out[0].ai_classification as Record<string, unknown>;
     expect(cls.merged_sources).toContain('harris_county_dba');
   });

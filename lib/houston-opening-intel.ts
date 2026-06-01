@@ -197,10 +197,16 @@ export const HOUSTON_NAME_MERGE_MIN_SIMILARITY = 0.85;
 /** 休斯顿数据源合并优先级（数值越大越优先保留为主记录） */
 export const HOUSTON_SOURCE_MERGE_PRIORITY: Readonly<Record<string, number>> = {
   houston_health_food_permit: 120,
-  houston_permit_ereport: 100,
-  houston_hdhhs: 80,
-  harris_county_dba: 60,
-  tx_sos_houston_supplement: 40,
+  houston_permit_portal: 110,
+  houston_tabc: 100,
+  houston_comptroller_sales_tax: 90,
+  tx_sos_houston_supplement: 80,
+  harris_county_dba: 70,
+  houston_obo_certified: 60,
+  houston_opendata_enrichment: 30,
+  /** 历史 source id（仅合并旧记录） */
+  houston_permit_ereport: 105,
+  houston_hdhhs: 25,
 };
 
 export function houstonMergePriority(source: string): number {
