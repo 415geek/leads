@@ -107,6 +107,19 @@ export default function LeadDetailPage({
     fetchLead();
   }, [id, router]);
 
+  const filingPortal = useMemo(
+    () =>
+      lead
+        ? resolveFilingPortalConfig({
+            metro_area: lead.metro_area,
+            source: lead.source,
+            city: lead.city,
+            address: lead.address,
+          })
+        : resolveFilingPortalConfig({}),
+    [lead],
+  );
+
   const handleStatusChange = async (newStatus: LeadStatus) => {
     if (!lead) return;
     
@@ -245,19 +258,6 @@ export default function LeadDetailPage({
       </div>
     );
   }
-
-  const filingPortal = useMemo(
-    () =>
-      lead
-        ? resolveFilingPortalConfig({
-            metro_area: lead.metro_area,
-            source: lead.source,
-            city: lead.city,
-            address: lead.address,
-          })
-        : resolveFilingPortalConfig({}),
-    [lead],
-  );
 
   if (!lead) {
     return null;
