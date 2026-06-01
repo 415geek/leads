@@ -17,6 +17,8 @@ import { Lead, LeadStatus } from '@/types/lead';
 import { ScoreBadge } from '@/components/score-badge';
 import { StatusBadge } from '@/components/status-badge';
 import { SourceRegistrationPanel } from '@/components/source-registration-panel';
+import { OwnerSearchPanel } from '@/components/owner-search-panel';
+import { buildOwnerSearchDefaultsFromLead } from '@/lib/lead-owner-search-defaults';
 import { SfRegistrationSummary } from '@/components/sf-registration-summary';
 import { FilingHistoryPanel } from '@/components/filing-history-panel';
 import { Input } from '@/components/ui/input';
@@ -498,6 +500,8 @@ export default function LeadDetailPage({
           </CardContent>
         </Card>
       </div>
+
+      <OwnerSearchPanel initialValues={buildOwnerSearchDefaultsFromLead(lead)} />
 
       <SourceRegistrationPanel sourceRaw={lead.source_raw ?? null} />
 

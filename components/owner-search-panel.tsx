@@ -10,6 +10,7 @@ import type { WhitepagesPersonRecord, WhitepagesSearchMetadata } from '@/lib/whi
 import { parseAddressInput } from '@/lib/whitepages/owner-search';
 import { formatOwnerRecord } from '@/lib/whitepages/format-record';
 import { useTranslations } from '@/lib/i18n';
+import type { OwnerSearchInitialValues } from '@/lib/lead-owner-search-defaults';
 
 const RESULTS_PER_PAGE = 5;
 
@@ -240,12 +241,17 @@ function OwnerResultCard({
   );
 }
 
-export function OwnerSearchPanel() {
+export function OwnerSearchPanel({
+  initialValues,
+}: {
+  /** 线索详情等场景：用店名/地址/登记 owner 预填表单 */
+  initialValues?: OwnerSearchInitialValues;
+} = {}) {
   const { t } = useTranslations();
-  const [name, setName] = useState('');
-  const [region, setRegion] = useState('');
-  const [address, setAddress] = useState('');
-  const [keywords, setKeywords] = useState('');
+  const [name, setName] = useState(initialValues?.name ?? '');
+  const [region, setRegion] = useState(initialValues?.region ?? '');
+  const [address, setAddress] = useState(initialValues?.address ?? '');
+  const [keywords, setKeywords] = useState(initialValues?.keywords ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState<number | null>(null);
