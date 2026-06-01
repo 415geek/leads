@@ -124,7 +124,8 @@ export const houstonComptrollerSalesTaxSource: FoodDataSource = {
 
   async fetchAndNormalize(opts) {
     const sinceIso = `${opts.sinceDate}T00:00:00.000`;
-    const where = `loc_city='HOUSTON' AND permit_date >= '${sinceIso}' AND (out_of_business_date IS NULL OR out_of_business_date = '')`;
+    // out_of_business_date 为日期列，不能与 '' 比较（Socrata 400 type-mismatch）
+    const where = `loc_city='HOUSTON' AND permit_date >= '${sinceIso}' AND out_of_business_date IS NULL`;
 
     const res = await fetchSocrata({
       endpoint: COMPTROLLER_ENDPOINT,
