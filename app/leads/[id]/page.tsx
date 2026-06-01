@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, use } from 'react';
+import { useEffect, useMemo, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,6 +26,7 @@ import { toast } from 'sonner';
 import { dashboardBusinessSearchHref } from '@/lib/dashboard-business-search';
 import type { OpeningIntelWebPayload } from '@/lib/opening-intel-web';
 import type { NycOpeningIntel } from '@/lib/nyc-opening-intel';
+import { resolveFilingPortalConfig } from '@/lib/filing-portal-config';
 
 function readNycOpeningIntel(lead: Lead): NycOpeningIntel | null {
   const cls = lead.ai_classification;
@@ -245,6 +246,19 @@ export default function LeadDetailPage({
     );
   }
 
+  const filingPortal = useMemo(
+    () =>
+      lead
+        ? resolveFilingPortalConfig({
+            metro_area: lead.metro_area,
+            source: lead.source,
+            city: lead.city,
+            address: lead.address,
+          })
+        : resolveFilingPortalConfig({}),
+    [lead],
+  );
+
   if (!lead) {
     return null;
   }
@@ -404,15 +418,20 @@ export default function LeadDetailPage({
                   ['phone', '电话', displayOrDash(lead.phone), false],
                   ['cuisine_type', '菜系 / 业态标签', displayOrDash(lead.cuisine_type), false],
                   ['city', '城市', lead.city, false],
+                  ['metro_area', '都会区', displayOrDash(lead.metro_area ?? null), false],
                   ['source', '数据来源', lead.source, false],
                   ['license_date', '执照 / 开业相关日期', displayOrDash(lead.license_date), false],
                   ['license_type', lead.source === 'nyc_dohmh' ? 'DOHMH 检查类型' : '执照类型说明', displayOrDash(lead.license_type), false],
-                  [
-                    'ca_entity_number',
-                    'CA 实体编号（SOS）',
-                    displayOrDash(lead.ca_entity_number ?? null),
-                    false,
-                  ],
+                  ...(filingPortal.showEntityField
+                    ? ([
+                        [
+                          'ca_entity_number',
+                          `${filingPortal.entityLabel ?? '实体编号'}（SOS）`,
+                          displayOrDash(lead.ca_entity_number ?? null),
+                          false,
+                        ],
+                      ] as const)
+                    : []),
                   ['lead_score', '线索评分', String(lead.lead_score), false],
                   ['lead_status', '跟进状态', lead.lead_status, false],
                   ['outreach_message', '开发信（已保存）', displayOrDash(lead.outreach_message), true],
@@ -461,24 +480,28 @@ export default function LeadDetailPage({
               </Select>
             </div>
 
-            <div>
-              <div className="text-sm text-gray-500 mb-2">CA 实体编号（BizFile）</div>
-              <Input
-                value={entityNumber}
-                onChange={(e) => setEntityNumber(e.target.value)}
-                placeholder="例如州务卿网站上的 Entity Number"
-              />
-              <Button
-                type="button"
-                onClick={handleSaveEntityNumber}
-                disabled={saving}
-                className="mt-2"
-                size="sm"
-                variant="secondary"
-              >
-                保存实体编号
-              </Button>
-            </div>
+            {filingPortal.showEntityField ? (
+              <div>
+                <div className="text-sm text-gray-500 mb-2">
+                  {filingPortal.entityLabel ?? '实体编号'}（BizFile）
+                </div>
+                <Input
+                  value={entityNumber}
+                  onChange={(e) => setEntityNumber(e.target.value)}
+                  placeholder="例如州务卿网站上的 Entity Number"
+                />
+                <Button
+                  type="button"
+                  onClick={handleSaveEntityNumber}
+                  disabled={saving}
+                  className="mt-2"
+                  size="sm"
+                  variant="secondary"
+                >
+                  保存实体编号
+                </Button>
+              </div>
+            ) : null}
 
             <div>
               <div className="text-sm text-gray-500 mb-2">备注</div>
@@ -508,10 +531,16 @@ export default function LeadDetailPage({
       <FilingHistoryPanel
         leadId={id}
         businessName={lead.name}
+        metroArea={lead.metro_area}
+        source={lead.source}
+        city={lead.city}
+        address={lead.address}
         entityNumber={
-          entityNumber.trim() !== ''
-            ? entityNumber.trim()
-            : lead.ca_entity_number?.trim() || undefined
+          filingPortal.showEntityField
+            ? entityNumber.trim() !== ''
+              ? entityNumber.trim()
+              : lead.ca_entity_number?.trim() || undefined
+            : undefined
         }
       />
 

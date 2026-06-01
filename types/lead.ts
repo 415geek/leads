@@ -33,6 +33,8 @@ export interface Lead {
   phone: string | null;
   cuisine_type: string | null;
   city: string;
+  /** 都会区（ingest 写入，用于州级政府备案门户） */
+  metro_area?: string | null;
   source: string;
   license_date: string | null;
   license_type: string | null;

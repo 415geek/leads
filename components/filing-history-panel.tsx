@@ -1,36 +1,44 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { LeadFiling } from '@/types/lead';
+import {
+  formatFiledDateForPortal,
+  resolveFilingPortalConfig,
+} from '@/lib/filing-portal-config';
 import { toast } from 'sonner';
-
-const CA_SOS_SEARCH = 'https://bizfileonline.sos.ca.gov/search/business';
-
-function formatFiledDate(iso: string | null): string {
-  if (!iso) return '—';
-  const d = new Date(iso + (iso.length <= 10 ? 'T12:00:00' : ''));
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('en-US', {
-    timeZone: 'America/Los_Angeles',
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-  });
-}
 
 export function FilingHistoryPanel({
   leadId,
   entityNumber,
   businessName,
+  metroArea,
+  source,
+  city,
+  address,
 }: {
   leadId: string;
   entityNumber?: string | null;
-  /** 打开 BizFile 时复制到剪贴板，便于粘贴搜索 */
   businessName?: string | null;
+  metroArea?: string | null;
+  source?: string | null;
+  city?: string | null;
+  address?: string | null;
 }) {
+  const portal = useMemo(
+    () =>
+      resolveFilingPortalConfig({
+        metro_area: metroArea,
+        source,
+        city,
+        address,
+      }),
+    [metroArea, source, city, address],
+  );
+
   const [filings, setFilings] = useState<LeadFiling[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -69,7 +77,7 @@ export function FilingHistoryPanel({
   const handleAddManual = async () => {
     const filing_type = manualType.trim();
     if (!filing_type) {
-      toast.error('请填写备案类型（如 Statement of Information）');
+      toast.error('请填写备案类型');
       return;
     }
     setSaving(true);
@@ -105,15 +113,16 @@ export function FilingHistoryPanel({
     }
   };
 
+  const formatFiledDate = (iso: string | null) =>
+    formatFiledDateForPortal(iso, portal.dateTimezone);
+
   return (
     <Card>
       <CardHeader className="space-y-1">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <CardTitle>政府备案（CA Secretary of State）</CardTitle>
-            <p className="text-sm font-normal text-muted-foreground mt-1">
-              在站内查看该企业的备案时间线与 PDF 链接。数据由你方通过 n8n 同步官方站或手动录入；本站不代爬 SOS。
-            </p>
+            <CardTitle>{portal.panelTitle}</CardTitle>
+            <p className="text-sm font-normal text-muted-foreground mt-1">{portal.description}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" size="sm" onClick={() => setAllOpen(true)}>
@@ -127,32 +136,38 @@ export function FilingHistoryPanel({
             </Button>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3 pt-2 text-sm">
-          <a
-            href={CA_SOS_SEARCH}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[#1e3a5f] underline font-medium"
-            title={
-              businessName?.trim()
-                ? '点击打开官方页，并复制该 Lead 店名到剪贴板，在站内搜索框粘贴即可'
-                : undefined
-            }
-            onClick={() => {
-              const n = businessName?.trim();
-              if (n) {
-                void navigator.clipboard.writeText(n).catch(() => {});
-              }
-            }}
-          >
-            打开 CA BizFile 搜索 ↗
-          </a>
-          {entityNumber?.trim() ? (
-            <span className="text-muted-foreground">
-              实体编号：<span className="font-mono text-slate-800">{entityNumber.trim()}</span>
-            </span>
-          ) : null}
-        </div>
+        {(portal.searchUrl || entityNumber?.trim()) && (
+          <div className="flex flex-wrap items-center gap-3 pt-2 text-sm">
+            {portal.searchUrl && portal.searchLinkLabel ? (
+              <a
+                href={portal.searchUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#1e3a5f] underline font-medium"
+                title={
+                  portal.clipboardOnOpen && businessName?.trim()
+                    ? '点击打开官方页，并复制该 Lead 店名到剪贴板，在站内搜索框粘贴即可'
+                    : undefined
+                }
+                onClick={() => {
+                  if (!portal.clipboardOnOpen) return;
+                  const n = businessName?.trim();
+                  if (n) {
+                    void navigator.clipboard.writeText(n).catch(() => {});
+                  }
+                }}
+              >
+                {portal.searchLinkLabel}
+              </a>
+            ) : null}
+            {entityNumber?.trim() && portal.entityLabel ? (
+              <span className="text-muted-foreground">
+                {portal.entityLabel}：
+                <span className="font-mono text-slate-800">{entityNumber.trim()}</span>
+              </span>
+            ) : null}
+          </div>
+        )}
       </CardHeader>
       <CardContent className="space-y-6">
         {loading ? (
@@ -227,7 +242,7 @@ export function FilingHistoryPanel({
               <Input
                 value={manualType}
                 onChange={(e) => setManualType(e.target.value)}
-                placeholder="e.g. Initial Filing"
+                placeholder={portal.manualTypePlaceholder}
               />
             </div>
             <div>
@@ -235,7 +250,7 @@ export function FilingHistoryPanel({
               <Input
                 value={manualControl}
                 onChange={(e) => setManualControl(e.target.value)}
-                placeholder="6071392"
+                placeholder={portal.controlIdPlaceholder}
               />
             </div>
             <div>
