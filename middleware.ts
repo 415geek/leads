@@ -45,6 +45,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // API v1：凭 API_V1_KEY / API_V1_KEYS，在 route handler 内校验
+  if (pathname.startsWith('/api/v1/')) {
+    return NextResponse.next();
+  }
+
   if (pathname.startsWith('/api/')) {
     if (!isAuthed) {
       return NextResponse.json({ error: '未登录' }, { status: 401 });

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { listLeadFilings } from '@/lib/leads/query-leads';
 import { appendFilings, leadExists, replaceCaSosFilings } from '@/lib/lead-filings';
 import type { LeadFilingInput } from '@/types/lead';
 
@@ -9,17 +9,9 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const filings = await listLeadFilings(id);
 
-    const { data, error } = await supabaseAdmin
-      .from('lead_filings')
-      .select('*')
-      .eq('lead_id', id)
-      .order('filed_date', { ascending: false, nullsFirst: false })
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-
-    return NextResponse.json({ filings: data ?? [] });
+    return NextResponse.json({ filings });
   } catch (error) {
     console.error('[GET /api/leads/[id]/filings]', error);
     return NextResponse.json(
