@@ -22,6 +22,10 @@ Downloads 版 P1 要求新建 `lead_contacts(phone/email + source_count)`，但�
 
 **P3 状态**：`lib/scoring/score-contact.ts`、`POST /api/leads/cross-validate`（`ENABLE_LEAD_EVIDENCE_CROSS_VALIDATE=1` 才启用，默认 503）。
 
+**P4 状态**：`lib/property/*`、`POST /api/property/lookup`（`ENABLE_LEAD_PROPERTY_LOOKUP=1` + `PROPERTY_PROVIDER=mock|attom`，默认 503）。
+
+**P5 状态**：`lib/identity/*`、`POST /api/leads/identify`（`ENABLE_LEAD_IDENTIFY=1`，OpenCorporates + source_raw，默认 503）。
+
 ---
 
 ## 使用说明
