@@ -1,3 +1,5 @@
+import type { LeadStoreStatus } from './lead-evidence';
+
 export type LeadStatus = 'new' | 'contacted' | 'in_progress' | 'converted' | 'not_interested';
 
 /** 政府开放数据等来源的完整登记快照（字段随来源变化） */
@@ -56,6 +58,12 @@ export interface Lead {
   /** V2 Pro: chain detection */
   is_chain?: boolean | null;
   chain_name?: string | null;
+  /** P1a evidence pipeline: legal entity vs natural person */
+  owner_entity_name?: string | null;
+  owner_person_name?: string | null;
+  apn?: string | null;
+  store_status?: LeadStoreStatus | null;
+  new_store_confidence?: number | null;
 }
 
 export interface LeadCreateInput {
