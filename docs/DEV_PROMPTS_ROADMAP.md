@@ -26,6 +26,10 @@ Downloads 版 P1 要求新建 `lead_contacts(phone/email + source_count)`，但�
 
 **P5 状态**：`lib/identity/*`、`POST /api/leads/identify`（`ENABLE_LEAD_IDENTIFY=1`，OpenCorporates + source_raw，默认 503）。
 
+**P2b 状态**：`lib/enrichment/enrich-lead.ts`、`POST /api/leads/enrich`（`ENABLE_LEAD_SKIP_TRACE_ENRICH=1`，默认 503）。
+
+**API v1 镜像**：`POST /api/v1/leads/:id/{identify,enrich,cross-validate}`、`POST /api/v1/property/lookup`（同 feature flag；见 `docs/COMPANY_API_INTEGRATION.md` §3.13）。
+
 ---
 
 ## 使用说明

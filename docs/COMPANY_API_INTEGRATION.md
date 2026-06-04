@@ -1,10 +1,12 @@
-# Restaurant Leads Finder — 企业 API 接入说明
+# Restaurant Leads Finder — API 接入说明
 
 **产品名称**：Restaurant Leads Finder（餐饮新店线索平台）  
 **API 版本**：v1  
 **生产环境 Base URL**：`https://leads.maxwelllai.com/api/v1`
 
-本文档供贵司技术团队对接使用。所有接口返回 JSON，UTF-8 编码。
+API Key 由我方运营单独发放，**勿写入代码仓库或本文档**。
+
+所有接口返回 JSON，UTF-8 编码。
 
 ---
 
@@ -302,6 +304,29 @@ POST /pdl/search
 
 ---
 
+### 3.13 证据链流水线（可选，需我方开启环境变量）
+
+用于 n8n / CRM 自动化：**识别经营主体 → 地产验证 → Skip-trace → 交叉验证打分**。默认关闭，未开启时返回 `503`。
+
+| 步骤 | 方法 | 路径 | 说明 |
+|------|------|------|------|
+| 1 识别 | POST | `/leads/{id}/identify` | 写入 `owner_name` / `owner_entity` 证据；一致时回写 `owner_*` 列 |
+| 2 地产 | POST | `/property/lookup` | Body: `{ "leadId": "uuid" }` → `is_new_store` 等证据 |
+| 3 联系方式 | POST | `/leads/{id}/enrich` | Skip-trace → `phone` / `email` 证据（需已有地址与老板姓名） |
+| 4 打分 | POST | `/leads/{id}/cross-validate` | 汇总证据 → `lead_contacts` + `store_status` |
+
+**推荐 n8n 顺序**
+
+```
+POST /api/leads/upsert  →  …/identify  →  …/property/lookup  →  …/enrich  →  …/cross-validate
+```
+
+（网页登录版路径为 `/api/leads/identify` 等，入参均为 `{ "leadId": "uuid" }`，与 v1 能力一致。）
+
+试跑无第三方账单时，我方可在 Vercel 配置 `PROPERTY_PROVIDER=mock`、`SKIP_TRACE_PROVIDER=mock`。
+
+---
+
 ## 4. 典型对接流程
 
 ```mermaid
@@ -358,22 +383,16 @@ curl -s -X POST -H "Authorization: Bearer $KEY" -H "Content-Type: application/js
 
 ## 7. 暂未开放 v1 的能力
 
-以下仍通过网页登录或专用密钥，如需 API 化请联系我方：
+以下仍通过网页登录或专用密钥：
 
 | 能力 | 说明 |
 |------|------|
 | 批量数据源导入 | 网页「导入」或内部 Cron |
 | HubSpot 导出 | 网页操作 |
-| n8n 线索推送 | 专用 Webhook 密钥 |
+| n8n 线索推送 | `POST /api/leads/upsert` + `x-webhook-secret`（非 API v1 Key） |
 
 ---
 
-## 8. 支持与变更
 
-- **技术联系**：[请填写贵司对接人邮箱]  
-- **变更通知**：v1 路径下字段只增不减；破坏性变更将发布 v2 并提前通知  
-- **密钥轮换**：申请新 Key 后旧 Key 可停用，请通过安全渠道接收新密钥
-
----
 
 *文档版本：2025-06-02 · API v1*

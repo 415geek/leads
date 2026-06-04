@@ -42,6 +42,10 @@ API_V1_KEY=your-long-random-secret-at-least-32-chars
 | GET | `/map-markers` | 地图标点 | read |
 | POST | `/owner/search` | 老板信息（Whitepages + 可选 AI 交叉验证） | write |
 | POST | `/pdl/search` | People Data Labs 人员搜索 | write |
+| POST | `/leads/:id/identify` | 经营主体识别 → `lead_evidence`（需 `ENABLE_LEAD_IDENTIFY=1`） | write |
+| POST | `/property/lookup` | 地产 lookup → `lead_evidence`（body `leadId`；需 `ENABLE_LEAD_PROPERTY_LOOKUP=1`） | write |
+| POST | `/leads/:id/enrich` | Skip-trace → `lead_evidence`（需 `ENABLE_LEAD_SKIP_TRACE_ENRICH=1`） | write |
+| POST | `/leads/:id/cross-validate` | 证据打分 → `lead_contacts`（需 `ENABLE_LEAD_EVIDENCE_CROSS_VALIDATE=1`） | write |
 
 ### GET `/leads` 查询参数
 
@@ -105,7 +109,9 @@ curl -s -X POST -H "Authorization: Bearer $KEY" \
 | n8n 线索入库 | `POST /api/leads/upsert` | `x-webhook-secret` |
 | 定时 ingest | `GET /api/cron/ingest-all` | `CRON_SECRET` |
 
-如需上述也走 API Key，可再加 `/api/v1/import` 等（第二批）。
+证据链四步（identify → property → enrich → cross-validate）已纳入 v1；默认关闭，见 `docs/COMPANY_API_INTEGRATION.md` §3.13。
+
+如需批量导入等也走 API Key，可再加 `/api/v1/import` 等（第二批）。
 
 ## 与现有 `/api/leads` 的关系
 
