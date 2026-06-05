@@ -310,7 +310,7 @@ POST /pdl/search
 
 | 步骤 | 方法 | 路径 | 说明 |
 |------|------|------|------|
-| 1 识别 | POST | `/leads/{id}/identify` | OpenCorporates + `source_raw` → `owner_name` / `owner_entity` 证据 |
+| 1 识别 | POST | `/leads/{id}/identify` | 政府 `ownership_name` → 法人判断 → OpenCorporates（API + AI 联网）→ `owner_name` / `owner_entity` 证据 |
 | 2 地产 | POST | `/property/lookup` | Body: `{ "leadId": "uuid" }` → `is_new_store` 等证据 |
 | 3 联系方式 | POST | `/leads/{id}/enrich` 或 `/owner/search` | 见下方 Provider 说明 |
 | 4 打分 | POST | `/leads/{id}/cross-validate` | 汇总证据 → `lead_contacts` + `store_status` |
@@ -345,6 +345,43 @@ GET  …/leads/{id}                    # 取店名、地址、source_raw（预�
 
 `persist-owner-search` 成功后一般**不必**再单独调 `cross-validate`（body 默认 `runCrossValidate: true`）。
 
+#### DataSF → OpenCorporates → AI 联网搜索（`identify` 步骤 1）
+
+适用于 SF Bay / 其他政府源在 `source_raw.ownership_name` 给出**法人实体**（如 `Pangea Management LLC`、`Original Buffalo Wings Inc.`），而 DBA 店名在 `name` 字段的场景。
+
+**链路（代码：`lib/identity/collect-hits.ts`、`lib/opencorporates/web-officers.ts`）**
+
+```
+source_raw.ownership_name
+  → 规则判断：公司 vs 自然人（lib/identity/entity-kind.ts）
+      · 含 LLC / Inc / Management 等 → 公司
+      · 像「MICHAEL SHAO」两人名 → 自然人，跳过 OpenCorporates
+  → OpenCorporates API 按法人名检索（非 DBA）
+  → API 无 CEO/Agent/CFO 时：
+      Tavily 定向搜 opencorporates.com
+      → 正则抽职务行；仍无则 Claude 从摘要解析高管
+  → 政府法人 + OC 同实体 → registry chain 锁定 owner_person_name
+  → Whitepages 只搜自然人姓名（非 LLC 名）
+```
+
+**证据 `raw_payload` 标记**
+
+| `lookup` | 含义 |
+|----------|------|
+| `api` | 仅 OpenCorporates API 命中高管 |
+| `api+web_search` | API 找到公司但无 officer，联网补全 |
+| `web_search` | API 失败，全靠 Tavily + 正则/AI |
+
+**环境变量（identify 联网回退）**
+
+| 变量 | 必需 | 说明 |
+|------|------|------|
+| `OPENCORPORATES_API_TOKEN` | 推荐 | API 主路径 |
+| `TAVILY_API_KEY` | 联网回退必需 | 搜 `opencorporates.com` |
+| `ANTHROPIC_API_KEY` | 可选 | 正则抽不到高管时用 Claude 解析 |
+
+**生产案例（SF）**：`Dumpling Patio` — `ownership_name` = `Original Buffalo Wings Inc.` → OC 得 CEO `QITING LEI` → Whitepages 搜自然人。`Pangea Management LLC` 类线索在 API 无 officer 时会走 `api+web_search`。
+
 #### 何时用半自动，而非全自动 `enrich`
 
 | 场景 | 建议路径 |
@@ -359,7 +396,8 @@ GET  …/leads/{id}                    # 取店名、地址、source_raw（预�
 
 **0. 预填搜索条件**（与仪表盘「老板信息搜索」一致，见 `lib/lead-owner-search-defaults.ts`）
 
-- `name`：优先 `source_raw` 中的 `tp_name` / `owner` / `applicant` 等；无则留空  
+- `name`：自然人老板（`identify` 或 `owner_person_name` 锁定后）；**不要**填 `ownership_name` 法人  
+- `entityName`：政府 `ownership_name` / `owner_entity_name`（供 OpenCorporates 交叉验证）  
 - `region`：`{city}, {state}`（地址无州时仅 city，建议 CRM 补全 `, TX`）  
 - `address`：线索 `address`  
 - `keywords`：线索 `name`（DBA），用于 AI 交叉验证过滤候选
@@ -375,6 +413,7 @@ Content-Type: application/json
 ```json
 {
   "name": "",
+  "entityName": "MONA ITALIAN FOOD LLC",
   "region": "HOUSTON, TX",
   "address": "500 DALLAS ST STE T20B",
   "keywords": "MARIA'S RESTAURANT"
@@ -487,4 +526,4 @@ curl -s -X POST -H "Authorization: Bearer $KEY" -H "Content-Type: application/js
 
 
 
-*文档版本：2026-06-05 · API v1（§3.13 补充半自动老板搜索 SOP）*
+*文档版本：2026-06-05 · API v1（§3.13 补充 AI 联网 OpenCorporates 高管检索 + 半自动老板搜索 SOP）*
