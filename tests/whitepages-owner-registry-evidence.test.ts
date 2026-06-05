@@ -5,6 +5,16 @@ import {
 } from '@/lib/whitepages/owner-registry-evidence';
 
 describe('buildRegistryWebQueries', () => {
+  it('prioritizes entityName for OpenCorporates queries', () => {
+    const queries = buildRegistryWebQueries({
+      name: 'MICHAEL SHAO',
+      keywords: 'Dumpling Kitchen',
+      entityName: 'Pangea Management LLC',
+    });
+    expect(queries[0]).toContain('Pangea Management LLC');
+    expect(queries[0]).toContain('opencorporates');
+  });
+
   it('includes keywords, name, and address', () => {
     const queries = buildRegistryWebQueries({
       name: 'Tony Lu',

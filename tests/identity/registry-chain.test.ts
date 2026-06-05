@@ -25,6 +25,28 @@ describe('resolveOwnerFromRegistryChain', () => {
     expect(r?.entityName).toBe('Original Buffalo Wings Inc.');
   });
 
+  it('confirms when high-confidence gov entity matches OC without ownership_name marker', () => {
+    const hits: IdentityNameHit[] = [
+      {
+        source: 'business_license',
+        entityName: 'Pangea Management LLC',
+        personName: null,
+        confidenceRaw: 0.9,
+        rawPayload: { from: 'source_raw' },
+      },
+      {
+        source: 'opencorporates',
+        entityName: 'PANGEA MANAGEMENT LLC',
+        personName: 'MICHAEL SHAO',
+        confidenceRaw: 0.74,
+        rawPayload: { position: 'chief executive officer', lookup: 'web_search' },
+      },
+    ];
+    const r = resolveOwnerFromRegistryChain(hits);
+    expect(r?.personName).toBe('MICHAEL SHAO');
+    expect(r?.entityName).toBe('Pangea Management LLC');
+  });
+
   it('returns null when entities disagree', () => {
     const hits: IdentityNameHit[] = [
       {

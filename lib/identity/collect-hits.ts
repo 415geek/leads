@@ -4,6 +4,11 @@ import {
   type OcCompanyHit,
 } from '@/lib/opencorporates/company-search';
 import { pickPrimaryOfficer } from '@/lib/opencorporates/officers';
+import { searchOpenCorporatesOfficersViaWeb } from '@/lib/opencorporates/web-officers';
+import {
+  classifyEntityNameKind,
+  shouldSearchOpenCorporatesForEntity,
+} from '@/lib/identity/entity-kind';
 import { entityNamesMatch } from '@/lib/identity/normalize';
 import { resolveLegalEntitySearchQuery } from '@/lib/identity/entity-search-query';
 import type { IdentityNameHit } from './types';
@@ -54,13 +59,27 @@ function hitsFromSourceRaw(
   // DataSF Registered Business Locations: ownership_name = legal entity holder (not DBA)
   const ownership = strFromRaw(raw, ['ownership_name']);
   if (ownership) {
-    hits.push({
-      source: licenseSource,
-      entityName: ownership,
-      personName: null,
-      confidenceRaw: 0.9,
-      rawPayload: { from: 'ownership_name' },
-    });
+    const kind = classifyEntityNameKind(ownership);
+    if (kind === 'person') {
+      hits.push({
+        source: licenseSource,
+        entityName: lead.name,
+        personName: ownership,
+        confidenceRaw: 0.88,
+        rawPayload: { from: 'ownership_name', entity_kind: 'person' },
+      });
+    } else {
+      hits.push({
+        source: licenseSource,
+        entityName: ownership,
+        personName: null,
+        confidenceRaw: 0.9,
+        rawPayload: {
+          from: 'ownership_name',
+          entity_kind: kind === 'company' ? 'company' : 'unknown',
+        },
+      });
+    }
   }
 
   const person = strFromRaw(raw, [
@@ -114,16 +133,75 @@ function pickBestOcCompany(
   return companies[0] ?? null;
 }
 
+function metroRegionLabel(metro: string | null | undefined): string | undefined {
+  const map: Record<string, string> = {
+    sf_bay: 'San Francisco, CA',
+    la: 'Los Angeles, CA',
+    houston: 'Houston, TX',
+    nyc: 'New York, NY',
+    chicago: 'Chicago, IL',
+    seattle: 'Seattle, WA',
+    boston: 'Boston, MA',
+    austin: 'Austin, TX',
+  };
+  return map[metro ?? ''];
+}
+
 export async function fetchOpenCorporatesHit(
   lead: LeadIdentityInput,
   fetchImpl: typeof fetch = globalThis.fetch,
 ): Promise<IdentityNameHit | null> {
   const jurisdiction = jurisdictionForMetro(lead.metro_area);
   const query = resolveLegalEntitySearchQuery(lead);
+  if (!shouldSearchOpenCorporatesForEntity(query)) return null;
+
   const expectedEntity =
     lead.source_raw && typeof lead.source_raw === 'object'
       ? strFromRaw(lead.source_raw, ['ownership_name'])
       : null;
+
+  const address =
+    lead.source_raw && typeof lead.source_raw === 'object'
+      ? strFromRaw(lead.source_raw, [
+          'address',
+          'business_address',
+          'location',
+          'street_address',
+        ])
+      : null;
+
+  const buildHit = (
+    entityName: string,
+    chosen: { name: string; position: string } | null,
+    extras: Record<string, unknown>,
+    baseConfidence: number,
+  ): IdentityNameHit => {
+    const entityMatchBoost =
+      expectedEntity && entityNamesMatch(entityName, expectedEntity) ? 0.08 : 0;
+    if (!chosen?.name) {
+      return {
+        source: 'opencorporates',
+        entityName,
+        personName: null,
+        confidenceRaw: 0.55,
+        rawPayload: {
+          search_query: query,
+          ...extras,
+        },
+      };
+    }
+    return {
+      source: 'opencorporates',
+      entityName,
+      personName: chosen.name,
+      confidenceRaw: Math.min(0.95, baseConfidence + entityMatchBoost),
+      rawPayload: {
+        position: chosen.position,
+        search_query: query,
+        ...extras,
+      },
+    };
+  };
 
   try {
     const companies = await searchOpenCorporatesCompanies(query, {
@@ -132,40 +210,51 @@ export async function fetchOpenCorporatesHit(
       fetchImpl,
     });
     const company = pickBestOcCompany(companies, expectedEntity);
-    if (!company) return null;
-
-    const chosen = pickPrimaryOfficer(company.officers);
-    if (!chosen?.name) {
-      return {
-        source: 'opencorporates',
-        entityName: company.name,
-        personName: null,
-        confidenceRaw: 0.55,
-        rawPayload: {
-          company: company.name,
-          search_query: query,
+    let chosen = company ? pickPrimaryOfficer(company.officers) : null;
+    let entityName = company?.name ?? query;
+    let extras: Record<string, unknown> = company
+      ? {
           opencorporates_url: company.opencorporates_url,
-        },
-      };
+          officers: company.officers.slice(0, 6),
+          lookup: 'api',
+        }
+      : { lookup: 'api', officers: [] };
+
+    if (!chosen?.name) {
+      const web = await searchOpenCorporatesOfficersViaWeb(entityName, {
+        address: address ?? undefined,
+        region: metroRegionLabel(lead.metro_area),
+      });
+      if (web.primary) {
+        chosen = web.primary;
+        extras = {
+          ...extras,
+          lookup: company ? 'api+web_search' : 'web_search',
+          web_search_via: web.via,
+          officers: web.officers.slice(0, 8),
+        };
+      }
     }
 
-    const entityMatchBoost =
-      expectedEntity && entityNamesMatch(company.name, expectedEntity) ? 0.08 : 0;
+    if (!company && !chosen?.name) return null;
 
-    return {
-      source: 'opencorporates',
-      entityName: company.name,
-      personName: chosen.name,
-      confidenceRaw: Math.min(0.95, 0.78 + entityMatchBoost),
-      rawPayload: {
-        position: chosen.position,
-        search_query: query,
-        opencorporates_url: company.opencorporates_url,
-        officers: company.officers.slice(0, 6),
-      },
-    };
+    return buildHit(entityName, chosen, extras, chosen ? 0.74 : 0.55);
   } catch {
-    return null;
+    const web = await searchOpenCorporatesOfficersViaWeb(query, {
+      address: address ?? undefined,
+      region: metroRegionLabel(lead.metro_area),
+    }).catch(() => null);
+    if (!web?.primary) return null;
+    return buildHit(
+      query,
+      web.primary,
+      {
+        lookup: 'web_search',
+        web_search_via: web.via,
+        officers: web.officers.slice(0, 8),
+      },
+      0.7,
+    );
   }
 }
 

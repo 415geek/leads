@@ -53,20 +53,30 @@ function resolveStateCode(region?: string, address?: string): string | undefined
 export function buildRegistryWebQueries(input: {
   name: string;
   keywords: string;
+  /** DataSF ownership_name 等法人实体；优先用于 OpenCorporates 定向查询 */
+  entityName?: string;
   region?: string;
   address?: string;
 }): string[] {
   const name = quotedIfHasSpace(input.name.trim());
   const keywords = quotedIfHasSpace(input.keywords.trim());
+  const entity = input.entityName?.trim() ? quotedIfHasSpace(input.entityName.trim()) : '';
   const region = input.region?.trim() ? quotedIfHasSpace(input.region.trim()) : '';
   const address = input.address?.trim() ? quotedIfHasSpace(input.address.trim()) : '';
 
-  const queries = [
+  const queries: string[] = [];
+  if (entity) {
+    queries.push(
+      `${entity} opencorporates CEO director agent CFO officers`,
+      `${entity} opencorporates.com registered agent`,
+    );
+  }
+  queries.push(
     [keywords, name, 'officer director LLC'].filter(Boolean).join(' '),
     [keywords, 'opencorporates company registration'].filter(Boolean).join(' '),
     [keywords, address, region, 'secretary of state business'].filter(Boolean).join(' '),
     [name, keywords, address, 'registered agent'].filter(Boolean).join(' '),
-  ];
+  );
 
   const seen = new Set<string>();
   return queries

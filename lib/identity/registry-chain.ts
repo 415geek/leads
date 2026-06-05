@@ -1,5 +1,29 @@
+import { shouldSearchOpenCorporatesForEntity } from '@/lib/identity/entity-kind';
 import { entityNamesMatch } from '@/lib/identity/normalize';
 import type { IdentityNameHit } from '@/lib/identity/types';
+
+const GOV_ENTITY_SOURCES = new Set(['business_license', 'abc', 'ca_sos']);
+
+function findGovEntityHit(hits: readonly IdentityNameHit[]): IdentityNameHit | null {
+  const fromOwnership = hits.find(
+    (h) =>
+      h.entityName?.trim() &&
+      h.rawPayload &&
+      typeof h.rawPayload === 'object' &&
+      (h.rawPayload as { from?: string }).from === 'ownership_name',
+  );
+  if (fromOwnership) return fromOwnership;
+
+  return (
+    hits.find(
+      (h) =>
+        GOV_ENTITY_SOURCES.has(h.source) &&
+        h.entityName?.trim() &&
+        shouldSearchOpenCorporatesForEntity(h.entityName) &&
+        (h.confidenceRaw ?? 0) >= 0.6,
+    ) ?? null
+  );
+}
 
 export interface RegistryChainResolution {
   entityName: string;
@@ -13,13 +37,7 @@ export interface RegistryChainResolution {
 export function resolveOwnerFromRegistryChain(
   hits: readonly IdentityNameHit[],
 ): RegistryChainResolution | null {
-  const gov = hits.find(
-    (h) =>
-      h.entityName?.trim() &&
-      h.rawPayload &&
-      typeof h.rawPayload === 'object' &&
-      (h.rawPayload as { from?: string }).from === 'ownership_name',
-  );
+  const gov = findGovEntityHit(hits);
   const oc = hits.find(
     (h) => h.source === 'opencorporates' && h.personName?.trim() && h.entityName?.trim(),
   );
