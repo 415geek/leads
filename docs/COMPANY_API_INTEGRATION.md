@@ -335,15 +335,87 @@ POST /api/leads/upsert
   → POST …/cross-validate
 ```
 
-**推荐人工/半自动顺序（销售在仪表盘）**
+**推荐人工/半自动顺序（销售在仪表盘或 CRM 触发）**
 
 ```
-线索详情 → 老板信息搜索（/owner/search）
-  → POST …/persist-owner-search   # ENABLE_LEAD_EVIDENCE_WRITE=1
-  → POST …/cross-validate
+GET  …/leads/{id}                    # 取店名、地址、source_raw（预填搜索）
+  → POST …/owner/search              # Whitepages + 可选 AI 关键字交叉验证
+  → POST …/leads/{id}/persist-owner-search   # 写 lead_evidence；默认再跑 cross-validate
 ```
 
-（网页登录版路径为 `/api/leads/identify` 等，入参均为 `{ "leadId": "uuid" }`；v1 镜像见 `docs/API_V1.md`。）
+`persist-owner-search` 成功后一般**不必**再单独调 `cross-validate`（body 默认 `runCrossValidate: true`）。
+
+#### 何时用半自动，而非全自动 `enrich`
+
+| 场景 | 建议路径 |
+|------|----------|
+| `identify` 未锁定自然人老板（`ownerResolutionStatus: review`） | **半自动** `owner/search` → `persist-owner-search` |
+| 店名是 DBA/LLC，直接 `enrich` 会把店名当自然人搜 | **半自动**（地址 + `keywords` = 店名） |
+| 已有多源一致的 `owner_person_name` | 可全自动 `enrich` → `cross-validate` |
+
+生产验证（2026-06）：Houston 线索 **MARIA'S RESTAURANT**（税号主体 `MONA ITALIAN FOOD LLC`）上，全自动 `enrich` 拉回 16 条联系方式但 cross-validate **全部 discarded**；半自动路径写入 **26** 条证据并最终入库 **2** 条休斯顿区号电话（`lead_contacts`，status `review`，待销售确认）。
+
+#### 半自动 SOP（API 逐步）
+
+**0. 预填搜索条件**（与仪表盘「老板信息搜索」一致，见 `lib/lead-owner-search-defaults.ts`）
+
+- `name`：优先 `source_raw` 中的 `tp_name` / `owner` / `applicant` 等；无则留空  
+- `region`：`{city}, {state}`（地址无州时仅 city，建议 CRM 补全 `, TX`）  
+- `address`：线索 `address`  
+- `keywords`：线索 `name`（DBA），用于 AI 交叉验证过滤候选
+
+**1. 老板搜索**
+
+```http
+POST /owner/search
+Authorization: Bearer {API_V1_KEY}
+Content-Type: application/json
+```
+
+```json
+{
+  "name": "",
+  "region": "HOUSTON, TX",
+  "address": "500 DALLAS ST STE T20B",
+  "keywords": "MARIA'S RESTAURANT"
+}
+```
+
+需 `WHITEPAGES_PRO_API_KEY`；`keywords` ≥2 字符且配置了 `ANTHROPIC_API_KEY` 时返回 `keyword_analysis_applied: true` 与 `analyses`（按候选人 `id` 索引）。
+
+**2. 证据入库 + 打分**
+
+```http
+POST /leads/{id}/persist-owner-search
+```
+
+```json
+{
+  "results": [ "... Whitepages 响应中的 results 数组原样传入 ..." ],
+  "analyses": { "... 可选，来自 owner/search 的 analyses ..." },
+  "keyword_analysis_applied": true,
+  "runCrossValidate": true
+}
+```
+
+需 `ENABLE_LEAD_EVIDENCE_WRITE=1` 与 `ENABLE_LEAD_EVIDENCE_CROSS_VALIDATE=1`。响应含 `evidenceInserted` 与 `crossValidate`（`contactsUpserted`、`storeStatus` 等）。
+
+**3. 人工确认（销售）**
+
+- 在仪表盘核对 `lead_contacts` 中 status 为 `review` 的号码/邮箱  
+- 确认老板后可在 UI 备注，或通过 `PATCH /leads/{id}` 更新 `notes` / `lead_status`  
+- 成交/无意向可写 `lead_outcomes`（`ENABLE_LEAD_FEEDBACK=1`）
+
+#### 路径对照
+
+| 能力 | 浏览器 Session | API v1 |
+|------|----------------|--------|
+| 识别 / 地产 / enrich / 打分 | `/api/leads/identify` 等，body `{ "leadId": "uuid" }` | `/api/v1/leads/:id/identify` 等 |
+| 老板搜索 | `/api/owner/search` | `/api/v1/owner/search` |
+| 搜索入库 | `/api/leads/{id}/persist-owner-search` | `/api/v1/leads/:id/persist-owner-search` |
+| 地产 lookup | `/api/property/lookup` | `/api/v1/property/lookup` |
+
+n8n/CRM 请使用 **v1 + `API_V1_KEY`**（`Authorization: Bearer` 或 `X-API-Key`）。若 `GET /health` 返回「无效的 API Key」，请在 Vercel Production 检查 `API_V1_KEY` 是否已配置非空值。
 
 ---
 
@@ -415,4 +487,4 @@ curl -s -X POST -H "Authorization: Bearer $KEY" -H "Content-Type: application/js
 
 
 
-*文档版本：2025-06-02 · API v1*
+*文档版本：2026-06-05 · API v1（§3.13 补充半自动老板搜索 SOP）*

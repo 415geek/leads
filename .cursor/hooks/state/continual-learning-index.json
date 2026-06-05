@@ -1,29 +1,65 @@
 {
   "version": 1,
   "transcripts": {
-    "/Users/c8geek/.cursor/projects/Users-c8geek-leads-1/agent-transcripts/f22632e1-d652-472c-987e-785a91261fe3/f22632e1-d652-472c-987e-785a91261fe3.jsonl": {
-      "mtimeMs": 1775629194000,
-      "indexedAtMs": 1776585000000
+    "/Users/c8geek/.cursor/projects/Users-c8geek-leads-1/agent-transcripts/41de73f0-9bc7-49af-affc-799fe94ef4d1/subagents/978d00cb-676f-47ab-b426-938c9bec6488.jsonl": {
+      "mtimeMs": 1780639617561.6975,
+      "indexedAtMs": 1780678193526
     },
-    "/Users/c8geek/.cursor/projects/Users-c8geek-leads-1/agent-transcripts/f22632e1-d652-472c-987e-785a91261fe3/subagents/05b7242a-56ff-40c6-8556-f8a71be0e330.jsonl": {
-      "mtimeMs": 1775521322000,
-      "indexedAtMs": 1776585000000
+    "/Users/c8geek/.cursor/projects/Users-c8geek-leads-1/agent-transcripts/41de73f0-9bc7-49af-affc-799fe94ef4d1/subagents/07c8d515-5efc-49cb-98d8-ec91f69b9a2f.jsonl": {
+      "mtimeMs": 1779840938682.1826,
+      "indexedAtMs": 1780678193526
     },
-    "/Users/c8geek/.cursor/projects/Users-c8geek-leads-1/agent-transcripts/f22632e1-d652-472c-987e-785a91261fe3/subagents/f7bc768e-e99f-4557-8be3-5b76ab56e7e0.jsonl": {
-      "mtimeMs": 1775548957000,
-      "indexedAtMs": 1776585000000
+    "/Users/c8geek/.cursor/projects/Users-c8geek-leads-1/agent-transcripts/41de73f0-9bc7-49af-affc-799fe94ef4d1/subagents/d8465749-dab4-46a1-800e-5838c7fe5dcf.jsonl": {
+      "mtimeMs": 1780678155974.2383,
+      "indexedAtMs": 1780678193526
     },
-    "/Users/c8geek/.cursor/projects/Users-c8geek-leads-1/agent-transcripts/1ef086d6-f9f1-4f5d-b0e9-9f988c992353/1ef086d6-f9f1-4f5d-b0e9-9f988c992353.jsonl": {
-      "mtimeMs": 1776462450000,
-      "indexedAtMs": 1776585000000
+    "/Users/c8geek/.cursor/projects/Users-c8geek-leads-1/agent-transcripts/41de73f0-9bc7-49af-affc-799fe94ef4d1/subagents/be61b253-742a-4d9d-92af-461d8b169367.jsonl": {
+      "mtimeMs": 1779826732477.212,
+      "indexedAtMs": 1780678193526
     },
-    "/Users/c8geek/.cursor/projects/Users-c8geek-leads-1/agent-transcripts/a3c2ca3a-be42-4e4a-af74-766f85a05c2e/a3c2ca3a-be42-4e4a-af74-766f85a05c2e.jsonl": {
-      "mtimeMs": 1776582356000,
-      "indexedAtMs": 1776585000000
+    "/Users/c8geek/.cursor/projects/Users-c8geek-leads-1/agent-transcripts/41de73f0-9bc7-49af-affc-799fe94ef4d1/subagents/1e5969fd-aea1-4ec2-a038-0c00cb236f45.jsonl": {
+      "mtimeMs": 1780337421492.18,
+      "indexedAtMs": 1780678193526
+    },
+    "/Users/c8geek/.cursor/projects/Users-c8geek-leads-1/agent-transcripts/41de73f0-9bc7-49af-affc-799fe94ef4d1/subagents/49a8eb4b-177d-4f30-b70c-b918bd56546e.jsonl": {
+      "mtimeMs": 1780365701626.6646,
+      "indexedAtMs": 1780678193526
+    },
+    "/Users/c8geek/.cursor/projects/Users-c8geek-leads-1/agent-transcripts/41de73f0-9bc7-49af-affc-799fe94ef4d1/41de73f0-9bc7-49af-affc-799fe94ef4d1.jsonl": {
+      "mtimeMs": 1780678123221.2463,
+      "indexedAtMs": 1780678193526
     },
     "/Users/c8geek/.cursor/projects/Users-c8geek-leads-1/agent-transcripts/a3c2ca3a-be42-4e4a-af74-766f85a05c2e/subagents/651bc4f4-6bbe-4f26-ba04-9ff4838bf379.jsonl": {
-      "mtimeMs": 1776582368000,
-      "indexedAtMs": 1776585000000
+      "mtimeMs": 1776582470525.1873,
+      "indexedAtMs": 1780678193526
+    },
+    "/Users/c8geek/.cursor/projects/Users-c8geek-leads-1/agent-transcripts/a3c2ca3a-be42-4e4a-af74-766f85a05c2e/a3c2ca3a-be42-4e4a-af74-766f85a05c2e.jsonl": {
+      "mtimeMs": 1776639811466.14,
+      "indexedAtMs": 1780678193526
+    },
+    "/Users/c8geek/.cursor/projects/Users-c8geek-leads-1/agent-transcripts/1ef086d6-f9f1-4f5d-b0e9-9f988c992353/1ef086d6-f9f1-4f5d-b0e9-9f988c992353.jsonl": {
+      "mtimeMs": 1776462450888.1692,
+      "indexedAtMs": 1780678193526
+    },
+    "/Users/c8geek/.cursor/projects/Users-c8geek-leads-1/agent-transcripts/f22632e1-d652-472c-987e-785a91261fe3/subagents/f7bc768e-e99f-4557-8be3-5b76ab56e7e0.jsonl": {
+      "mtimeMs": 1775548957547.8594,
+      "indexedAtMs": 1780678193526
+    },
+    "/Users/c8geek/.cursor/projects/Users-c8geek-leads-1/agent-transcripts/f22632e1-d652-472c-987e-785a91261fe3/subagents/05b7242a-56ff-40c6-8556-f8a71be0e330.jsonl": {
+      "mtimeMs": 1775521322960.0022,
+      "indexedAtMs": 1780678193526
+    },
+    "/Users/c8geek/.cursor/projects/Users-c8geek-leads-1/agent-transcripts/f22632e1-d652-472c-987e-785a91261fe3/f22632e1-d652-472c-987e-785a91261fe3.jsonl": {
+      "mtimeMs": 1775629194027.8337,
+      "indexedAtMs": 1780678193526
+    },
+    "/Users/c8geek/.cursor/projects/Users-c8geek-leads-1/agent-transcripts/45b6caea-e066-4157-847d-180397250033/subagents/02752e2b-dded-4bc1-8d48-56363fb53fd1.jsonl": {
+      "mtimeMs": 1776666756577.441,
+      "indexedAtMs": 1780678193526
+    },
+    "/Users/c8geek/.cursor/projects/Users-c8geek-leads-1/agent-transcripts/45b6caea-e066-4157-847d-180397250033/45b6caea-e066-4157-847d-180397250033.jsonl": {
+      "mtimeMs": 1776710598856.1096,
+      "indexedAtMs": 1780678193526
     }
   }
 }
