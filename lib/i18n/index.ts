@@ -66,6 +66,10 @@ const zh = {
   owner_more_addresses: (n: number) => `另有 ${n} 条历史地址`,
   owner_raw_json: '查看原始 API 数据',
   owner_metadata: '响应 metadata',
+  owner_evidence_saved: (evidenceCount: number, contactsCount: number | null) =>
+    contactsCount != null && contactsCount > 0
+      ? `已写入 ${evidenceCount} 条证据，交叉验证后更新 ${contactsCount} 条联系方式。`
+      : `已写入 ${evidenceCount} 条证据到线索档案。`,
 
   // Leads page
   leads_title: 'Leads 管理',
@@ -173,6 +177,10 @@ const en: typeof zh = {
   owner_more_addresses: (n: number) => `${n} more past address(es)`,
   owner_raw_json: 'View raw API JSON',
   owner_metadata: 'Response metadata',
+  owner_evidence_saved: (evidenceCount: number, contactsCount: number | null) =>
+    contactsCount != null && contactsCount > 0
+      ? `Saved ${evidenceCount} evidence row(s); cross-validation updated ${contactsCount} contact(s).`
+      : `Saved ${evidenceCount} evidence row(s) to this lead.`,
 
   leads_title: 'Leads Management',
   import_all: 'Import All Enabled Cities',

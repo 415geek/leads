@@ -46,6 +46,7 @@ API_V1_KEY=your-long-random-secret-at-least-32-chars
 | POST | `/property/lookup` | 地产 lookup → `lead_evidence`（body `leadId`；需 `ENABLE_LEAD_PROPERTY_LOOKUP=1`） | write |
 | POST | `/leads/:id/enrich` | Skip-trace → `lead_evidence`（需 `ENABLE_LEAD_SKIP_TRACE_ENRICH=1`） | write |
 | POST | `/leads/:id/cross-validate` | 证据打分 → `lead_contacts`（需 `ENABLE_LEAD_EVIDENCE_CROSS_VALIDATE=1`） | write |
+| POST | `/leads/:id/persist-owner-search` | Whitepages 搜索结果 → `lead_evidence`（body: `results`, `analyses`；需 `ENABLE_LEAD_EVIDENCE_WRITE=1`） | write |
 
 ### GET `/leads` 查询参数
 

@@ -1,5 +1,9 @@
 import { v1Error, v1Json } from '@/lib/api-v1/response';
 import { crossValidateLeadById, isLeadEvidenceCrossValidateEnabled } from '@/lib/evidence/cross-validate-lead';
+import { isLeadEvidenceWriteEnabled } from '@/lib/evidence/evidence-write-flag';
+import { persistOwnerSearchForLead } from '@/lib/evidence/persist-owner-search';
+import type { OwnerKeywordAnalysis } from '@/lib/whitepages/owner-keyword-match';
+import type { WhitepagesPersonRecord } from '@/lib/whitepages/owner-search';
 import {
   isLeadSkipTraceEnrichEnabled,
   skipTraceEnrichLeadById,
@@ -78,6 +82,40 @@ export async function v1PropertyLookupLead(
     return v1Json({ ok: true, ...result });
   } catch (err) {
     return mapPipelineError(err) ?? v1Error('地产查询失败', 500);
+  }
+}
+
+export async function v1PersistOwnerSearchLead(
+  supabase: SupabaseClient,
+  leadId: string,
+  body: {
+    results?: WhitepagesPersonRecord[];
+    analyses?: Record<string, OwnerKeywordAnalysis>;
+    keyword_analysis_applied?: boolean;
+    runCrossValidate?: boolean;
+  },
+): Promise<Response> {
+  if (!isLeadEvidenceWriteEnabled()) {
+    return v1Error(
+      '证据链入库未启用',
+      503,
+      '设置 ENABLE_LEAD_EVIDENCE_WRITE=1 并执行 lead_evidence 迁移',
+    );
+  }
+  try {
+    const results = Array.isArray(body.results) ? body.results : [];
+    const result = await persistOwnerSearchForLead(supabase, leadId, {
+      results,
+      analyses: body.analyses,
+      keywordAnalysisApplied: Boolean(body.keyword_analysis_applied),
+      runCrossValidate: body.runCrossValidate !== false,
+    });
+    if (!result.schemaReady) {
+      return v1Error('数据库 schema 未就绪', 503, result.schemaHint);
+    }
+    return v1Json({ ok: true, ...result });
+  } catch (err) {
+    return mapPipelineError(err) ?? v1Error('证据入库失败', 500);
   }
 }
 

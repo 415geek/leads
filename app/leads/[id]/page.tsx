@@ -524,7 +524,10 @@ export default function LeadDetailPage({
         </Card>
       </div>
 
-      <OwnerSearchPanel initialValues={buildOwnerSearchDefaultsFromLead(lead)} />
+      <OwnerSearchPanel
+        leadId={id}
+        initialValues={buildOwnerSearchDefaultsFromLead(lead)}
+      />
 
       <SourceRegistrationPanel sourceRaw={lead.source_raw ?? null} />
 

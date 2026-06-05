@@ -243,9 +243,12 @@ function OwnerResultCard({
 
 export function OwnerSearchPanel({
   initialValues,
+  leadId,
 }: {
   /** 线索详情等场景：用店名/地址/登记 owner 预填表单 */
   initialValues?: OwnerSearchInitialValues;
+  /** 线索 ID：设置后搜索成功会写入 lead_evidence（需 ENABLE_LEAD_EVIDENCE_WRITE=1） */
+  leadId?: string;
 } = {}) {
   const { t } = useTranslations();
   const [name, setName] = useState(initialValues?.name ?? '');
@@ -267,6 +270,7 @@ export function OwnerSearchPanel({
   const [metadata, setMetadata] = useState<WhitepagesSearchMetadata | null>(null);
   const [searched, setSearched] = useState(false);
   const [page, setPage] = useState(1);
+  const [evidenceNote, setEvidenceNote] = useState<string | null>(null);
 
   const canSubmit = useMemo(() => {
     const n = name.trim();
@@ -296,6 +300,7 @@ export function OwnerSearchPanel({
 
     setLoading(true);
     setError(null);
+    setEvidenceNote(null);
     setSearched(true);
     setPage(1);
     try {
@@ -328,6 +333,45 @@ export function OwnerSearchPanel({
           : null,
       );
       setMetadata(json.metadata ?? null);
+
+      const loadedResults = Array.isArray(json.results) ? json.results : [];
+      const loadedAnalyses =
+        json.analyses && typeof json.analyses === 'object'
+          ? (json.analyses as Record<string, OwnerKeywordAnalysis>)
+          : {};
+      const keywordApplied = Boolean(json.keyword_analysis_applied);
+
+      if (leadId && loadedResults.length > 0) {
+        void (async () => {
+          try {
+            const persistRes = await fetch(`/api/leads/${leadId}/persist-owner-search`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                results: loadedResults,
+                analyses: loadedAnalyses,
+                keyword_analysis_applied: keywordApplied,
+              }),
+            });
+            if (persistRes.status === 503) return;
+            const persistJson = await persistRes.json().catch(() => ({}));
+            if (!persistRes.ok) return;
+            const inserted =
+              typeof persistJson.evidenceInserted === 'number' ? persistJson.evidenceInserted : 0;
+            const contacts =
+              typeof persistJson.crossValidate?.contactsUpserted === 'number'
+                ? persistJson.crossValidate.contactsUpserted
+                : null;
+            setEvidenceNote(
+              contacts != null && contacts > 0
+                ? t.owner_evidence_saved(inserted, contacts)
+                : t.owner_evidence_saved(inserted, null),
+            );
+          } catch {
+            /* 证据入库失败不阻断搜索展示 */
+          }
+        })();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '搜索失败');
       setTotal(null);
@@ -407,6 +451,10 @@ export function OwnerSearchPanel({
 
         {searched && !loading && error && (
           <p className="text-sm text-red-600">{error}</p>
+        )}
+
+        {evidenceNote && (
+          <p className="text-xs text-emerald-800">{evidenceNote}</p>
         )}
 
         {searched && !loading && !error && (
