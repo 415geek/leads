@@ -3,6 +3,11 @@ import type { LeadEvidenceInsert } from '@/types/lead-evidence';
 import { isMissingSchemaError } from '@/lib/evidence/postgres-errors';
 import { collectIdentityHits, type LeadIdentityInput } from './collect-hits';
 import { computeIdentityConsensus } from './consensus';
+import { isLeadIdentifyGateEnabled } from './identify-gate';
+import {
+  ownerPersonCandidatesFromHits,
+  resolveOwnerPerson,
+} from './resolve-owner-person';
 
 export function isLeadIdentifyEnabled(): boolean {
   return process.env.ENABLE_LEAD_IDENTIFY === '1';
@@ -19,6 +24,8 @@ export interface IdentifyLeadResult {
   schemaReady: boolean;
   schemaHint?: string;
   reviewReason: string | null;
+  /** flag 开时：confirmed 才写 owner_person_name */
+  ownerResolutionStatus?: 'confirmed' | 'review' | null;
 }
 
 function hitsToEvidence(leadId: string, hits: ReturnType<typeof computeIdentityConsensus>['hits']): LeadEvidenceInsert[] {
@@ -103,10 +110,33 @@ export async function identifyLeadById(
   }
 
   let ownerFieldsUpdated = false;
+  let ownerResolutionStatus: 'confirmed' | 'review' | null = null;
+  let reviewReason = consensus.reviewReason;
+
+  const personResolution = isLeadIdentifyGateEnabled()
+    ? resolveOwnerPerson(ownerPersonCandidatesFromHits(consensus.hits))
+    : null;
+
+  if (personResolution) {
+    ownerResolutionStatus = personResolution.status;
+    if (personResolution.status !== 'confirmed') {
+      reviewReason = personResolution.evidence.disagreeing.length
+        ? 'owner_person_sources_disagree'
+        : 'owner_person_single_source';
+    }
+  }
+
   if (consensus.locked) {
     const patch: Record<string, string> = {};
     if (consensus.entityName) patch.owner_entity_name = consensus.entityName;
-    if (consensus.personName) patch.owner_person_name = consensus.personName;
+
+    const personToWrite = isLeadIdentifyGateEnabled()
+      ? personResolution?.status === 'confirmed'
+        ? personResolution.person
+        : null
+      : consensus.personName;
+
+    if (personToWrite) patch.owner_person_name = personToWrite;
 
     if (Object.keys(patch).length > 0) {
       const { error: patchErr } = await supabase.from('leads').update(patch).eq('id', leadId);
@@ -121,7 +151,7 @@ export async function identifyLeadById(
           ownerFieldsUpdated: false,
           schemaReady: true,
           schemaHint: '证据已写入，但 owner_* 列未迁移，未回写主表。',
-          reviewReason: null,
+          reviewReason,
         };
       }
       if (patchErr) throw patchErr;
@@ -132,12 +162,17 @@ export async function identifyLeadById(
   return {
     leadId,
     entityName: consensus.entityName,
-    personName: consensus.personName,
+    personName: isLeadIdentifyGateEnabled()
+      ? personResolution?.status === 'confirmed'
+        ? personResolution.person
+        : null
+      : consensus.personName,
     agreementScore: consensus.agreementScore,
     locked: consensus.locked,
     evidenceInserted,
     ownerFieldsUpdated,
     schemaReady: true,
-    reviewReason: consensus.reviewReason,
+    reviewReason,
+    ownerResolutionStatus,
   };
 }
