@@ -40,7 +40,7 @@ const STEP_META: Record<
     label: '1. 识别经营主体',
     short: '识别',
     path: '/api/leads/identify',
-    hint: 'OpenCorporates + 政府登记 → owner 证据',
+    hint: 'DataSF ownership → OpenCorporates 高管 → 预填老板搜索',
   },
   property: {
     label: '2. 地产验证',
@@ -96,7 +96,8 @@ function formatStepSummary(step: PipelineStep, json: Record<string, unknown>): s
       const status = json.ownerResolutionStatus;
       const inserted = json.evidenceInserted;
       const entity = json.entityName;
-      return `实体 ${entity ?? '—'} · 状态 ${status ?? '—'} · 证据 +${inserted ?? 0}`;
+      const person = json.personName;
+      return `实体 ${entity ?? '—'} · 老板 ${person ?? '—'} · 状态 ${status ?? '—'} · 证据 +${inserted ?? 0}`;
     }
     case 'property': {
       const sig = json.newStoreSignal as { isNewStore?: boolean; confidence?: number } | undefined;
@@ -196,7 +197,11 @@ export function SalesWorkflowPanel({
         setScoredContacts(json.contacts as ScoredContactChannel[]);
       }
       if (toastOnSuccess) {
-        if (step === 'identify' && json.ownerResolutionStatus === 'review') {
+        if (step === 'identify' && json.ownerResolutionStatus === 'confirmed' && json.personName) {
+          toast.success(`已解析老板：${String(json.personName)}`, {
+            description: '已写入档案；可在下方老板搜索用 Whitepages 查联系方式。',
+          });
+        } else if (step === 'identify' && json.ownerResolutionStatus === 'review') {
           toast.message('识别需人工复核', {
             description: '建议用下方「老板信息搜索」确认自然人老板，再入库联系方式。',
           });

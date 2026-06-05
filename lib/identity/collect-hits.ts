@@ -1,7 +1,12 @@
 import type { LeadEvidenceSource } from '@/types/lead-evidence';
+import {
+  searchOpenCorporatesCompanies,
+  type OcCompanyHit,
+} from '@/lib/opencorporates/company-search';
+import { pickPrimaryOfficer } from '@/lib/opencorporates/officers';
+import { entityNamesMatch } from '@/lib/identity/normalize';
+import { resolveLegalEntitySearchQuery } from '@/lib/identity/entity-search-query';
 import type { IdentityNameHit } from './types';
-
-const OC_BASE = 'https://api.opencorporates.com/v0.4';
 
 function jurisdictionForMetro(metro: string | null | undefined): string {
   const map: Record<string, string> = {
@@ -15,15 +20,6 @@ function jurisdictionForMetro(metro: string | null | undefined): string {
     austin: 'us_tx',
   };
   return map[metro ?? ''] ?? 'us';
-}
-
-interface OcOfficer {
-  name: string;
-  position: string;
-}
-
-interface OcApiResponse {
-  results?: { companies?: Array<{ company: { name: string; officers?: Array<{ officer: OcOfficer }> } }> };
 }
 
 export interface LeadIdentityInput {
@@ -106,44 +102,67 @@ function hitsFromSourceRaw(
   return hits;
 }
 
+function pickBestOcCompany(
+  companies: readonly OcCompanyHit[],
+  expectedEntity: string | null,
+): OcCompanyHit | null {
+  if (companies.length === 0) return null;
+  if (expectedEntity) {
+    const matched = companies.find((c) => entityNamesMatch(c.name, expectedEntity));
+    if (matched) return matched;
+  }
+  return companies[0] ?? null;
+}
+
 export async function fetchOpenCorporatesHit(
   lead: LeadIdentityInput,
   fetchImpl: typeof fetch = globalThis.fetch,
 ): Promise<IdentityNameHit | null> {
-  const apiKey = process.env.OPENCORPORATES_API_TOKEN;
   const jurisdiction = jurisdictionForMetro(lead.metro_area);
-  const q = encodeURIComponent(lead.name.slice(0, 80));
-  const tokenParam = apiKey ? `&api_token=${apiKey}` : '';
-  const url = `${OC_BASE}/companies/search?q=${q}&jurisdiction_code=${jurisdiction}${tokenParam}`;
+  const query = resolveLegalEntitySearchQuery(lead);
+  const expectedEntity =
+    lead.source_raw && typeof lead.source_raw === 'object'
+      ? strFromRaw(lead.source_raw, ['ownership_name'])
+      : null;
 
   try {
-    const res = await fetchImpl(url, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) return null;
-    const json = (await res.json()) as OcApiResponse;
-    const company = json.results?.companies?.[0]?.company;
+    const companies = await searchOpenCorporatesCompanies(query, {
+      jurisdictionCode: jurisdiction,
+      maxResults: 3,
+      fetchImpl,
+    });
+    const company = pickBestOcCompany(companies, expectedEntity);
     if (!company) return null;
 
-    const officers = company.officers?.map((o) => o.officer) ?? [];
-    const prioritized = officers.filter((o) =>
-      /owner|president|director|manager|principal/i.test(o.position),
-    );
-    const chosen = prioritized[0] ?? officers[0];
+    const chosen = pickPrimaryOfficer(company.officers);
     if (!chosen?.name) {
       return {
         source: 'opencorporates',
         entityName: company.name,
         personName: null,
-        confidenceRaw: 0.5,
-        rawPayload: { company: company.name },
+        confidenceRaw: 0.55,
+        rawPayload: {
+          company: company.name,
+          search_query: query,
+          opencorporates_url: company.opencorporates_url,
+        },
       };
     }
+
+    const entityMatchBoost =
+      expectedEntity && entityNamesMatch(company.name, expectedEntity) ? 0.08 : 0;
 
     return {
       source: 'opencorporates',
       entityName: company.name,
       personName: chosen.name,
-      confidenceRaw: 0.72,
-      rawPayload: { position: chosen.position },
+      confidenceRaw: Math.min(0.95, 0.78 + entityMatchBoost),
+      rawPayload: {
+        position: chosen.position,
+        search_query: query,
+        opencorporates_url: company.opencorporates_url,
+        officers: company.officers.slice(0, 6),
+      },
     };
   } catch {
     return null;

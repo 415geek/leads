@@ -18,7 +18,7 @@ describe('lead-owner-search-defaults', () => {
     expect(v.keywords).toBe('Lu\'s Kitchen');
   });
 
-  it('prefills ownership_name from DataSF source_raw', () => {
+  it('maps DataSF ownership_name to entityName, not Whitepages name', () => {
     const v = buildOwnerSearchDefaultsFromLead({
       name: 'Dumpling Patio',
       address: '2499 Lombard St',
@@ -28,8 +28,22 @@ describe('lead-owner-search-defaults', () => {
         dba_name: 'Dumpling Patio',
       },
     });
-    expect(v.name).toBe('Original Buffalo Wings Inc.');
+    expect(v.name).toBe('');
+    expect(v.entityName).toBe('Original Buffalo Wings Inc.');
     expect(v.keywords).toBe('Dumpling Patio');
+  });
+
+  it('prefills Whitepages name from owner_person_name after identify', () => {
+    const v = buildOwnerSearchDefaultsFromLead({
+      name: 'Dumpling Patio',
+      address: '2499 Lombard St',
+      city: 'San Francisco',
+      owner_person_name: 'JINZHUO HUANG',
+      owner_entity_name: 'Original Buffalo Wings Inc.',
+      source_raw: null,
+    });
+    expect(v.name).toBe('JINZHUO HUANG');
+    expect(v.entityName).toBe('Original Buffalo Wings Inc.');
   });
 
   it('uses city alone when address has no state suffix', () => {

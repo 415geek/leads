@@ -560,7 +560,14 @@ export default function LeadDetailPage({
 
       <OwnerSearchPanel
         leadId={id}
-        initialValues={buildOwnerSearchDefaultsFromLead(lead)}
+        initialValues={buildOwnerSearchDefaultsFromLead({
+          name: lead.name,
+          address: lead.address,
+          city: lead.city,
+          source_raw: lead.source_raw,
+          owner_person_name: lead.owner_person_name,
+          owner_entity_name: lead.owner_entity_name,
+        })}
         onPipelineComplete={refetchLead}
         highlight={suggestOwnerSearch}
       />

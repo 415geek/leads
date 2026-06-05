@@ -25,6 +25,8 @@ export interface OwnerKeywordMatchInput {
   region?: string;
   address?: string;
   keywords?: string;
+  /** 法人实体名（DataSF ownership_name），OpenCorporates 优先按此检索 */
+  entityName?: string;
   candidates: WhitepagesPersonRecord[];
 }
 
@@ -299,6 +301,7 @@ export async function runOwnerKeywordMatch(
           region: input.region,
           address: input.address,
           keywords,
+          entityName: input.entityName,
         }),
   ]);
 

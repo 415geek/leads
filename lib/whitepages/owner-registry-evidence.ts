@@ -81,6 +81,8 @@ export function buildRegistryWebQueries(input: {
 export async function collectOwnerRegistryEvidence(input: {
   name: string;
   keywords: string;
+  /** DataSF ownership_name 等；优先于 keywords 查 OpenCorporates */
+  entityName?: string;
   region?: string;
   address?: string;
   fetchImpl?: typeof fetch;
@@ -90,8 +92,10 @@ export async function collectOwnerRegistryEvidence(input: {
     resolveStateCode(input.region, input.address),
   );
 
+  const ocQuery = input.entityName?.trim() || input.keywords.trim();
+
   const [opencorporates_companies, registry_web_snippets] = await Promise.all([
-    searchOpenCorporatesCompanies(input.keywords, {
+    searchOpenCorporatesCompanies(ocQuery, {
       jurisdictionCode: jurisdiction_code,
       maxResults: 3,
       fetchImpl: input.fetchImpl,

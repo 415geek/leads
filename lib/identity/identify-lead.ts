@@ -8,6 +8,7 @@ import {
   ownerPersonCandidatesFromHits,
   resolveOwnerPerson,
 } from './resolve-owner-person';
+import { resolveOwnerFromRegistryChain } from './registry-chain';
 import { isLeadEnrichMergeEnabled, mergeEnrichment } from '@/lib/pipeline/merge-enrichment';
 
 export function isLeadIdentifyEnabled(): boolean {
@@ -114,11 +115,16 @@ export async function identifyLeadById(
   let ownerResolutionStatus: 'confirmed' | 'review' | null = null;
   let reviewReason = consensus.reviewReason;
 
+  const registryChain = resolveOwnerFromRegistryChain(consensus.hits);
+
   const personResolution = isLeadIdentifyGateEnabled()
     ? resolveOwnerPerson(ownerPersonCandidatesFromHits(consensus.hits))
     : null;
 
-  if (personResolution) {
+  if (registryChain) {
+    ownerResolutionStatus = 'confirmed';
+    reviewReason = null;
+  } else if (personResolution) {
     ownerResolutionStatus = personResolution.status;
     if (personResolution.status !== 'confirmed') {
       reviewReason = personResolution.evidence.disagreeing.length
@@ -131,11 +137,13 @@ export async function identifyLeadById(
     const patch: Record<string, string> = {};
     if (consensus.entityName) patch.owner_entity_name = consensus.entityName;
 
-    const personToWrite = isLeadIdentifyGateEnabled()
-      ? personResolution?.status === 'confirmed'
-        ? personResolution.person
-        : null
-      : consensus.personName;
+    const personToWrite = registryChain?.personName
+      ? registryChain.personName
+      : isLeadIdentifyGateEnabled()
+        ? personResolution?.status === 'confirmed'
+          ? personResolution.person
+          : null
+        : consensus.personName;
 
     if (personToWrite) patch.owner_person_name = personToWrite;
 
@@ -146,11 +154,12 @@ export async function identifyLeadById(
           return {
             leadId,
             entityName: consensus.entityName,
-            personName: isLeadIdentifyGateEnabled()
-              ? personResolution?.status === 'confirmed'
-                ? personResolution.person
-                : null
-              : consensus.personName,
+            personName: registryChain?.personName
+              ?? (isLeadIdentifyGateEnabled()
+                ? personResolution?.status === 'confirmed'
+                  ? personResolution.person
+                  : null
+                : consensus.personName),
             agreementScore: consensus.agreementScore,
             locked: consensus.locked,
             evidenceInserted,
@@ -188,11 +197,12 @@ export async function identifyLeadById(
   return {
     leadId,
     entityName: consensus.entityName,
-    personName: isLeadIdentifyGateEnabled()
-      ? personResolution?.status === 'confirmed'
-        ? personResolution.person
-        : null
-      : consensus.personName,
+    personName: registryChain?.personName
+      ?? (isLeadIdentifyGateEnabled()
+        ? personResolution?.status === 'confirmed'
+          ? personResolution.person
+          : null
+        : consensus.personName),
     agreementScore: consensus.agreementScore,
     locked: consensus.locked,
     evidenceInserted,

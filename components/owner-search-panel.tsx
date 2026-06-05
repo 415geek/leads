@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -262,6 +262,7 @@ export function OwnerSearchPanel({
   const [region, setRegion] = useState(initialValues?.region ?? '');
   const [address, setAddress] = useState(initialValues?.address ?? '');
   const [keywords, setKeywords] = useState(initialValues?.keywords ?? '');
+  const [entityName, setEntityName] = useState(initialValues?.entityName ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState<number | null>(null);
@@ -278,6 +279,15 @@ export function OwnerSearchPanel({
   const [searched, setSearched] = useState(false);
   const [page, setPage] = useState(1);
   const [evidenceNote, setEvidenceNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!initialValues || searched) return;
+    if (initialValues.name?.trim()) setName(initialValues.name);
+    if (initialValues.region?.trim()) setRegion(initialValues.region);
+    if (initialValues.address?.trim()) setAddress(initialValues.address);
+    if (initialValues.keywords?.trim()) setKeywords(initialValues.keywords);
+    if (initialValues.entityName?.trim()) setEntityName(initialValues.entityName);
+  }, [initialValues, searched]);
 
   const canSubmit = useMemo(() => {
     const n = name.trim();
@@ -316,6 +326,7 @@ export function OwnerSearchPanel({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: name.trim(),
+          entityName: entityName.trim() || undefined,
           region: region.trim(),
           address: address.trim(),
           keywords: keywords.trim(),
@@ -425,6 +436,19 @@ export function OwnerSearchPanel({
       <CardHeader>
         <CardTitle className="text-lg text-[#1e3a5f]">{t.owner_title}</CardTitle>
         <p className="text-sm font-normal text-muted-foreground">{t.owner_description}</p>
+        {entityName.trim() ? (
+          <p className="text-xs text-slate-600">
+            法人实体（OpenCorporates 检索）：<span className="font-medium">{entityName}</span>
+            {name.trim() ? (
+              <>
+                {' '}
+                · Whitepages 姓名：<span className="font-medium">{name}</span>
+              </>
+            ) : (
+              ' · 请先点上方「识别」解析高管姓名，或手动填写姓名'
+            )}
+          </p>
+        ) : null}
       </CardHeader>
       <CardContent className="space-y-4">
         <form onSubmit={handleSubmit} className="space-y-4">

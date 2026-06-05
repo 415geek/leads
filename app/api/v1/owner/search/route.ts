@@ -29,6 +29,7 @@ export const POST = withApiV1Auth(
     const region = trimField(body.region, 120);
     const address = trimField(body.address, 200);
     const keywords = trimField(body.keywords, 200);
+    const entityName = trimField(body.entityName, 200);
 
     const ctx = resolveOwnerSearchContext({ name, region, address, keywords });
     if (!ctx.queryValid) {
@@ -51,6 +52,7 @@ export const POST = withApiV1Auth(
         region: region || undefined,
         address: address || undefined,
         keywords: keywords || undefined,
+        entityName: entityName || undefined,
         candidates: wpResult.results,
       });
 
