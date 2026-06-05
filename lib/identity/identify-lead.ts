@@ -8,6 +8,7 @@ import {
   ownerPersonCandidatesFromHits,
   resolveOwnerPerson,
 } from './resolve-owner-person';
+import { isLeadEnrichMergeEnabled, mergeEnrichment } from '@/lib/pipeline/merge-enrichment';
 
 export function isLeadIdentifyEnabled(): boolean {
   return process.env.ENABLE_LEAD_IDENTIFY === '1';
@@ -139,23 +140,48 @@ export async function identifyLeadById(
     if (personToWrite) patch.owner_person_name = personToWrite;
 
     if (Object.keys(patch).length > 0) {
-      const { error: patchErr } = await supabase.from('leads').update(patch).eq('id', leadId);
-      if (patchErr && isMissingSchemaError(patchErr)) {
-        return {
-          leadId,
-          entityName: consensus.entityName,
-          personName: consensus.personName,
-          agreementScore: consensus.agreementScore,
-          locked: consensus.locked,
-          evidenceInserted,
-          ownerFieldsUpdated: false,
-          schemaReady: true,
-          schemaHint: '证据已写入，但 owner_* 列未迁移，未回写主表。',
-          reviewReason,
-        };
+      if (isLeadEnrichMergeEnabled()) {
+        const merged = await mergeEnrichment(supabase, leadId, patch);
+        if (!merged.schemaReady) {
+          return {
+            leadId,
+            entityName: consensus.entityName,
+            personName: isLeadIdentifyGateEnabled()
+              ? personResolution?.status === 'confirmed'
+                ? personResolution.person
+                : null
+              : consensus.personName,
+            agreementScore: consensus.agreementScore,
+            locked: consensus.locked,
+            evidenceInserted,
+            ownerFieldsUpdated: false,
+            schemaReady: true,
+            schemaHint: merged.schemaHint ?? '证据已写入，但 owner_* 列未迁移，未回写主表。',
+            reviewReason,
+            ownerResolutionStatus,
+          };
+        }
+        ownerFieldsUpdated = merged.updated;
+      } else {
+        const { error: patchErr } = await supabase.from('leads').update(patch).eq('id', leadId);
+        if (patchErr && isMissingSchemaError(patchErr)) {
+          return {
+            leadId,
+            entityName: consensus.entityName,
+            personName: consensus.personName,
+            agreementScore: consensus.agreementScore,
+            locked: consensus.locked,
+            evidenceInserted,
+            ownerFieldsUpdated: false,
+            schemaReady: true,
+            schemaHint: '证据已写入，但 owner_* 列未迁移，未回写主表。',
+            reviewReason,
+            ownerResolutionStatus,
+          };
+        }
+        if (patchErr) throw patchErr;
+        ownerFieldsUpdated = true;
       }
-      if (patchErr) throw patchErr;
-      ownerFieldsUpdated = true;
     }
   }
 
