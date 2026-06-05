@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isMissingSchemaError } from '@/lib/evidence/postgres-errors';
 import { computeNewStoreSignal } from './new-store-signal';
-import { getPropertyProvider } from './provider';
+import { getPropertyProvider, propertyEvidenceSource } from './provider';
 import { propertyLookupToEvidenceRows } from './to-evidence';
 import type { PropertyLookupResult } from './types';
 
@@ -82,6 +82,7 @@ export async function propertyLookupLeadById(
     address,
     apn: row.apn ?? undefined,
     city: row.city ?? undefined,
+    sourceRaw: row.source_raw ?? null,
   });
 
   const signal = computeNewStoreSignal({
@@ -93,7 +94,7 @@ export async function propertyLookupLeadById(
     leadId,
     lookup,
     signal,
-    provider.id === 'mock' ? 'attom' : 'attom',
+    propertyEvidenceSource(provider.id as 'attom' | 'government' | 'mock'),
   );
 
   const { error: insertErr } = await supabase.from('lead_evidence').insert(evidenceRows);

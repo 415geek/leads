@@ -306,24 +306,44 @@ POST /pdl/search
 
 ### 3.13 证据链流水线（可选，需我方开启环境变量）
 
-用于 n8n / CRM 自动化：**识别经营主体 → 地产验证 → Skip-trace → 交叉验证打分**。默认关闭，未开启时返回 `503`。
+用于 n8n / CRM 自动化：**识别经营主体 → 地产验证 → 联系方式 → 交叉验证打分**。默认关闭，未开启时返回 `503`。
 
 | 步骤 | 方法 | 路径 | 说明 |
 |------|------|------|------|
-| 1 识别 | POST | `/leads/{id}/identify` | 写入 `owner_name` / `owner_entity` 证据；一致时回写 `owner_*` 列 |
+| 1 识别 | POST | `/leads/{id}/identify` | OpenCorporates + `source_raw` → `owner_name` / `owner_entity` 证据 |
 | 2 地产 | POST | `/property/lookup` | Body: `{ "leadId": "uuid" }` → `is_new_store` 等证据 |
-| 3 联系方式 | POST | `/leads/{id}/enrich` | Skip-trace → `phone` / `email` 证据（需已有地址与老板姓名） |
+| 3 联系方式 | POST | `/leads/{id}/enrich` 或 `/owner/search` | 见下方 Provider 说明 |
 | 4 打分 | POST | `/leads/{id}/cross-validate` | 汇总证据 → `lead_contacts` + `store_status` |
 
-**推荐 n8n 顺序**
+**生产推荐 Provider（无需 ATTOM / BatchData）**
+
+| 能力 | 环境变量 | 推荐值 | 说明 |
+|------|----------|--------|------|
+| 地产 | `PROPERTY_PROVIDER` | `government` | 读线索 `source_raw` 中政府 permit/牌照字段，零 API 费 |
+| 联系方式 | `SKIP_TRACE_PROVIDER` | `whitepages` | 复用 `WHITEPAGES_PRO_API_KEY`，与 `/owner/search` 同源 |
+| 试跑 | 同上 | `mock` | 无账单、固定 fixture |
+
+可选付费替代：`PROPERTY_PROVIDER=attom`（ATTOM）、`SKIP_TRACE_PROVIDER=batchdata`（BatchData）。
+
+**推荐 n8n 顺序（自动化）**
 
 ```
-POST /api/leads/upsert  →  …/identify  →  …/property/lookup  →  …/enrich  →  …/cross-validate
+POST /api/leads/upsert
+  → POST …/identify
+  → POST …/property/lookup
+  → POST …/enrich          # SKIP_TRACE_PROVIDER=whitepages
+  → POST …/cross-validate
 ```
 
-（网页登录版路径为 `/api/leads/identify` 等，入参均为 `{ "leadId": "uuid" }`，与 v1 能力一致。）
+**推荐人工/半自动顺序（销售在仪表盘）**
 
-试跑无第三方账单时，我方可在 Vercel 配置 `PROPERTY_PROVIDER=mock`、`SKIP_TRACE_PROVIDER=mock`。
+```
+线索详情 → 老板信息搜索（/owner/search）
+  → POST …/persist-owner-search   # ENABLE_LEAD_EVIDENCE_WRITE=1
+  → POST …/cross-validate
+```
+
+（网页登录版路径为 `/api/leads/identify` 等，入参均为 `{ "leadId": "uuid" }`；v1 镜像见 `docs/API_V1.md`。）
 
 ---
 

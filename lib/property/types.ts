@@ -10,6 +10,8 @@ export interface PropertyLookupInput {
   address: string;
   apn?: string;
   city?: string;
+  /** ingest 写入的政府 open-data 快照（government provider 使用） */
+  sourceRaw?: Record<string, unknown> | null;
 }
 
 export interface PropertyLookupResult {

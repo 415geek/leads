@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isMissingSchemaError } from '@/lib/evidence/postgres-errors';
-import { getSkipTraceProvider } from './provider';
+import { getSkipTraceProvider, skipTraceEvidenceSource } from './provider';
 import { skipTraceToEvidenceRows } from './skip-trace-to-evidence';
 import type { SkipTraceResult } from './types';
 import { SkipTraceError } from './types';
@@ -77,8 +77,11 @@ export async function skipTraceEnrichLeadById(
     throw new SkipTraceError('Skip-trace failed', 'upstream', err);
   }
 
-  const source = provider.id === 'mock' ? 'batchdata' : 'batchdata';
-  const evidenceRows = skipTraceToEvidenceRows(leadId, trace, source);
+  const evidenceRows = skipTraceToEvidenceRows(
+    leadId,
+    trace,
+    skipTraceEvidenceSource(provider.id as 'batchdata' | 'mock' | 'whitepages'),
+  );
 
   if (evidenceRows.length === 0) {
     return {
