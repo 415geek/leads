@@ -16,6 +16,7 @@ import { runPipeline, type PipelineLead } from '@/lib/pipeline/run';
 import { dedupePipelineLeads } from '@/lib/pipeline/dedupe';
 import { mergeHoustonCrossSourceLeads } from '@/lib/pipeline/houston-merge';
 import { enabledSources } from '@/lib/sources/registry';
+import { getCostGateUsageSnapshot } from '@/lib/pipeline/cost-gate';
 import { getDailyEnrichCount } from '@/lib/pipeline/enrich';
 
 export const dynamic = 'force-dynamic';
@@ -108,6 +109,7 @@ export async function GET(request: Request) {
     droppedNonRestaurant,
     enrichmentCalls,
     enrichmentDailyCounter: getDailyEnrichCount(),
+    costGateUsage: getCostGateUsageSnapshot(),
     sinceDate,
     sources: sourceResults,
     elapsedMs,

@@ -11,6 +11,16 @@
  */
 
 import type { ClassifiedDraft } from './classify';
+import {
+  _resetCostGateStateForTests,
+  hasRecentPaidEnrich,
+  isLeadCostGateEnabled,
+  normalizeLeadKey,
+  recordPaidCacheSkip,
+  recordPaidEnrichCall,
+  shouldCallPaidEnrich,
+  type PreEnrichScoreInput,
+} from './cost-gate';
 
 export interface EnrichmentResult {
   /** 本次是否实际调了外部 API（true = 花了钱；false = 缓存/跳过） */
@@ -22,7 +32,13 @@ export interface EnrichmentResult {
   raw: Record<string, unknown> | null;
 }
 
-export interface EnrichedDraft extends ClassifiedDraft {
+/** 可选 cross-validate / chain 字段，供成本闸门预估分使用。 */
+export interface EnrichableDraft extends ClassifiedDraft {
+  source_count?: number;
+  is_chain?: boolean;
+}
+
+export interface EnrichedDraft extends EnrichableDraft {
   enrichment: EnrichmentResult | null;
 }
 
@@ -41,7 +57,7 @@ export function defaultEnricher(): EnricherClient | null {
 }
 
 export async function enrichDrafts(
-  kept: readonly ClassifiedDraft[],
+  kept: readonly EnrichableDraft[],
   opts: { client?: EnricherClient | null } = {},
 ): Promise<EnrichedDraft[]> {
   const client = opts.client === undefined ? defaultEnricher() : opts.client;
@@ -50,9 +66,23 @@ export async function enrichDrafts(
     return kept.map((c) => ({ ...c, enrichment: null }));
   }
 
+  const costGate = isLeadCostGateEnabled();
   const out: EnrichedDraft[] = [];
   for (const c of kept) {
     try {
+      if (costGate) {
+        const gateInput: PreEnrichScoreInput = {
+          draft: c.draft,
+          confidence: c.confidence,
+          source_count: c.source_count,
+          is_chain: c.is_chain,
+        };
+        const gate = shouldCallPaidEnrich(gateInput, 'google_places');
+        if (!gate.allowed) {
+          out.push({ ...c, enrichment: null });
+          continue;
+        }
+      }
       const enrichment = await client.enrich(c);
       out.push({ ...c, enrichment });
     } catch (err) {
@@ -130,11 +160,17 @@ export function createGooglePlacesEnricher(
       // 闸门 1 已由上层保证（此处仅断言）
       if (!c.is_restaurant) return null;
 
-      // 闸门 2：缓存命中
+      // 闸门 2：进程内 Places 缓存命中
       const key = cacheKey(c);
       const cached = enrichCache.get(key);
       if (cached && cached.expiresAt > Date.now()) {
         return { ...cached.result, fetched: false };
+      }
+
+      const paidKey = normalizeLeadKey(c.draft.name, c.draft.address);
+      if (isLeadCostGateEnabled() && hasRecentPaidEnrich('google_places', paidKey)) {
+        recordPaidCacheSkip('google_places', paidKey);
+        return null;
       }
 
       // 闸门 3：日预算熔断
@@ -195,6 +231,10 @@ export function createGooglePlacesEnricher(
           expiresAt: Date.now() + NINETY_DAYS_MS,
         });
 
+        if (isLeadCostGateEnabled()) {
+          recordPaidEnrichCall('google_places', paidKey);
+        }
+
         return result;
       } catch (err) {
         console.warn('[enrich] fetch error:', err);
@@ -208,6 +248,7 @@ export function createGooglePlacesEnricher(
 export function _resetEnrichStateForTests(): void {
   enrichCache.clear();
   dailyCounter = { day: '', count: 0 };
+  _resetCostGateStateForTests();
 }
 
 /** 观测：当前日调用计数（cron 总结日志用） */
