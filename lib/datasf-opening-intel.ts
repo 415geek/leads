@@ -339,7 +339,7 @@ export function matchDatasfTransfer(
   const ownerJ = tokenJaccard(activeOwner, oldOwner);
   const dbaJ = tokenJaccard(activeDbaN, oldDbaN);
 
-  let ownerChanged = activeOwner && oldOwner && ownerJ < sameBrand;
+  const ownerChanged = activeOwner && oldOwner && ownerJ < sameBrand;
   const certChanged =
     !!activeCert &&
     !!oldCert &&

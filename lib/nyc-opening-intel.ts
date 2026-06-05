@@ -7,14 +7,18 @@
 
 import type { NewOpeningLabel } from '@/lib/datasf-opening-intel';
 import { pickText } from '@/lib/bay-area-food-import/shared';
+import { isLeadOpeningIntelEnabled } from '@/lib/opening-intel/flags';
+import {
+  buildNycOpeningSignals,
+  nycLabelFromRank,
+  nycPriorityRank,
+  parseNycCategory,
+  parseNycPhase,
+} from '@/lib/opening-intel/nyc';
+import { scoreOpening } from '@/lib/opening-intel/score-opening';
+import type { NycInspectionCategory, NycInspectionPhase } from '@/lib/opening-intel/types';
 
-export type NycInspectionCategory =
-  | 'pre_permit_non_operational'
-  | 'pre_permit_operational'
-  | 'cycle'
-  | 'unknown';
-
-export type NycInspectionPhase = 'initial' | 're_inspection' | 'unknown';
+export type { NycInspectionCategory, NycInspectionPhase };
 
 export interface NycOpeningIntel {
   inspection_type: string;
@@ -33,7 +37,12 @@ export interface NycOpeningIntel {
 
 const DISPLAY_BY_RANK: Record<
   number,
-  { display_status: string; label: NewOpeningLabel; lead_value: 'high' | 'medium' | 'low'; confidence: 'HIGH' | 'MEDIUM' | 'LOW' }
+  {
+    display_status: string;
+    label: NewOpeningLabel;
+    lead_value: 'high' | 'medium' | 'low';
+    confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  }
 > = {
   1: {
     display_status: '发证前检查（未营业）/ 初检',
@@ -73,34 +82,12 @@ const DISPLAY_BY_RANK: Record<
   },
 };
 
-function parsePhase(text: string): NycInspectionPhase {
-  const t = text.toLowerCase();
-  if (t.includes('re-inspection') || t.includes('reinspection')) return 're_inspection';
-  if (t.includes('initial inspection')) return 'initial';
-  return 'unknown';
-}
-
-function parseCategory(text: string): NycInspectionCategory {
-  const t = text.toLowerCase();
-  if (t.includes('pre-permit') && t.includes('non-operational')) return 'pre_permit_non_operational';
-  if (t.includes('pre-permit') && t.includes('operational')) return 'pre_permit_operational';
-  if (t.includes('cycle inspection')) return 'cycle';
-  return 'unknown';
-}
-
-function priorityRank(category: NycInspectionCategory, phase: NycInspectionPhase): number {
-  if (category === 'pre_permit_non_operational') return phase === 're_inspection' ? 2 : 1;
-  if (category === 'pre_permit_operational') return phase === 're_inspection' ? 4 : 3;
-  if (category === 'cycle') return phase === 're_inspection' ? 6 : 5;
-  return 99;
-}
-
-/** 解析 DOHMH inspection_type 字段（如 "Pre-permit (Non-operational) / Initial Inspection"） */
-export function parseNycInspectionType(raw: string | null | undefined): NycOpeningIntel {
-  const inspection_type = pickText(raw) || 'unknown';
-  const category = parseCategory(inspection_type);
-  const phase = parsePhase(inspection_type);
-  const rank = priorityRank(category, phase);
+function nycIntelFromParts(
+  inspection_type: string,
+  category: NycInspectionCategory,
+  phase: NycInspectionPhase,
+  rank: number,
+): NycOpeningIntel {
   const meta = DISPLAY_BY_RANK[rank] ?? {
     display_status: '未知检查类型',
     label: 'weak_signal' as NewOpeningLabel,
@@ -120,6 +107,41 @@ export function parseNycInspectionType(raw: string | null | undefined): NycOpeni
     confidence_score: meta.confidence,
     is_pre_permit: category === 'pre_permit_non_operational' || category === 'pre_permit_operational',
   };
+}
+
+/** flag 关：与历史实现一致的内联路径 */
+function parseNycInspectionTypeLegacy(raw: string | null | undefined): NycOpeningIntel {
+  const inspection_type = pickText(raw) || 'unknown';
+  const category = parseNycCategory(inspection_type);
+  const phase = parseNycPhase(inspection_type);
+  const rank = nycPriorityRank(category, phase);
+  return nycIntelFromParts(inspection_type, category, phase, rank);
+}
+
+/** flag 开：经共享 scoreOpening，再映射回 NycOpeningIntel 形状 */
+function parseNycInspectionTypeShared(raw: string | null | undefined): NycOpeningIntel {
+  const signals = buildNycOpeningSignals(raw);
+  const scored = scoreOpening(signals);
+  const rank = signals.priorityRank;
+  const intel = nycIntelFromParts(
+    signals.inspectionType,
+    signals.category,
+    signals.phase,
+    rank,
+  );
+  // 共享层 label 须与 rank 表一致（parity 由单测保证）
+  if (scored.openingLabel && scored.openingLabel !== intel.new_opening_label) {
+    intel.new_opening_label = nycLabelFromRank(rank);
+  }
+  return intel;
+}
+
+/** 解析 DOHMH inspection_type 字段（如 "Pre-permit (Non-operational) / Initial Inspection"） */
+export function parseNycInspectionType(raw: string | null | undefined): NycOpeningIntel {
+  if (isLeadOpeningIntelEnabled()) {
+    return parseNycInspectionTypeShared(raw);
+  }
+  return parseNycInspectionTypeLegacy(raw);
 }
 
 export function nycIncludeCycleInspections(): boolean {

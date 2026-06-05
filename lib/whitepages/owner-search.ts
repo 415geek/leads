@@ -170,7 +170,7 @@ export function buildWhitepagesQueryParams(input: OwnerSearchInput): URLSearchPa
 
   const regionParts = parseRegionInput(region);
   let street = addrParts.street;
-  let city = addrParts.city ?? regionParts.city;
+  const city = addrParts.city ?? regionParts.city;
   const state_code = addrParts.state_code ?? regionParts.state_code;
 
   if (street && regionParts.city && !addrParts.city) {

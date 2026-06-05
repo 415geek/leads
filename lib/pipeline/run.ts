@@ -39,6 +39,9 @@ import { enrichDrafts } from './enrich';
 import { scoreDraft } from './score';
 import type { FoodDataSource, NormalizedDraft, SourceFetchResult } from '@/lib/sources/types';
 import { enabledSources } from '@/lib/sources/registry';
+import { isLeadOpeningIntelEnabled } from '@/lib/opening-intel/flags';
+import { buildHoustonOpeningSignalsFromIntel } from '@/lib/opening-intel/houston';
+import { scoreOpening } from '@/lib/opening-intel/score-opening';
 
 export interface PipelineLead extends NormalizedDraft {
   lead_score: number;
@@ -166,6 +169,11 @@ export async function runPipeline(
     if (e.draft.opening_signals) mergedCls.datasf_opening = e.draft.opening_signals;
     if (e.draft.houston_opening) mergedCls.houston_opening = e.draft.houston_opening;
     if (e.draft.nyc_opening) mergedCls.nyc_opening = e.draft.nyc_opening;
+    if (e.draft.houston_opening && isLeadOpeningIntelEnabled()) {
+      mergedCls.opening_intel_score = scoreOpening(
+        buildHoustonOpeningSignalsFromIntel(e.draft.houston_opening),
+      );
+    }
     if (
       e.draft.houston_opening?.display_status === 'pre-opening' &&
       e.enrichment?.business_status === 'OPERATIONAL'

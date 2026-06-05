@@ -12,6 +12,13 @@
 
 import type { FoodDataSource, NormalizedDraft, SourceFetchResult } from './types';
 import { buildCuisineLabel, pickText, snapshotSourceRaw } from '@/lib/bay-area-food-import/shared';
+import { isLeadOpeningIntelEnabled } from '@/lib/opening-intel/flags';
+import {
+  buildLaOpeningSignals,
+  laMaxInspectionCountFromEnv,
+  laPassesNewFacilityHeuristic,
+} from '@/lib/opening-intel/la';
+import { scoreOpening } from '@/lib/opening-intel/score-opening';
 
 /** Portal item → Feature Service base URL（服务每季度可能换名，item id 较稳定） */
 export const LA_COUNTY_RESTAURANT_INSPECTION_ITEM_ID =
@@ -227,8 +234,12 @@ async function collectNewFacilityIds(args: {
         break;
       }
       if (
-        args.maxInspectionCountInDataset > 0 &&
-        row.cnt > args.maxInspectionCountInDataset
+        !shouldIncludeLaNewFacilityRow({
+          firstActivityMs: row.first_act_ms,
+          sinceMs: args.sinceMs,
+          inspectionRowCount: row.cnt,
+          maxInspectionRowsForNew: args.maxInspectionCountInDataset,
+        })
       ) {
         continue;
       }
@@ -365,10 +376,26 @@ function normalizeRow(
 }
 
 function maxInspectionCountEnv(): number {
-  const raw = process.env.LA_COUNTY_NEW_FACILITY_MAX_INSPECTION_ROWS?.trim();
-  if (!raw) return 12;
-  const n = parseInt(raw, 10);
-  return Number.isFinite(n) && n > 0 ? n : 12;
+  return laMaxInspectionCountFromEnv(process.env.LA_COUNTY_NEW_FACILITY_MAX_INSPECTION_ROWS);
+}
+
+function shouldIncludeLaNewFacilityRow(args: {
+  firstActivityMs: number;
+  sinceMs: number;
+  inspectionRowCount: number;
+  maxInspectionRowsForNew: number;
+}): boolean {
+  if (isLeadOpeningIntelEnabled()) {
+    const signals = buildLaOpeningSignals({
+      strategy: 'new_facilities',
+      firstActivityMs: args.firstActivityMs,
+      sinceMs: args.sinceMs,
+      inspectionRowCount: args.inspectionRowCount,
+      maxInspectionRowsForNew: args.maxInspectionRowsForNew,
+    });
+    return scoreOpening(signals).isLikelyNewStore;
+  }
+  return laPassesNewFacilityHeuristic(args);
 }
 
 async function fetchNewFacilityInspectionRows(args: {

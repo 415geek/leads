@@ -21,23 +21,20 @@ function BusinessSearchPanelInner() {
   const searchParams = useSearchParams();
   const appliedFromUrl = useRef(false);
 
-  const [name, setName] = useState('');
-  const [city, setCity] = useState('');
+  const bizFromUrl = searchParams.get(DASHBOARD_BIZ_QUERY)?.trim() ?? '';
+  const bizCityFromUrl = searchParams.get(DASHBOARD_BIZ_CITY_QUERY)?.trim() ?? '';
+  const hasBizFromUrl = bizFromUrl.length >= 2;
+
+  const [name, setName] = useState(hasBizFromUrl ? bizFromUrl : '');
+  const [city, setCity] = useState(hasBizFromUrl ? bizCityFromUrl : '');
   const [enrich, setEnrich] = useState(true);
-  const [submitted, setSubmitted] = useState(false);
+  const [submitted, setSubmitted] = useState(hasBizFromUrl);
 
   useEffect(() => {
-    if (appliedFromUrl.current) return;
-    const biz = searchParams.get(DASHBOARD_BIZ_QUERY)?.trim();
-    const bizCity = searchParams.get(DASHBOARD_BIZ_CITY_QUERY)?.trim();
-    if (biz && biz.length >= 2) {
-      appliedFromUrl.current = true;
-      setName(biz);
-      setCity(bizCity ?? '');
-      setSubmitted(true);
-      router.replace(pathname || '/', { scroll: false });
-    }
-  }, [searchParams, router, pathname]);
+    if (!hasBizFromUrl || appliedFromUrl.current) return;
+    appliedFromUrl.current = true;
+    router.replace(pathname || '/', { scroll: false });
+  }, [hasBizFromUrl, router, pathname]);
 
   const { categories, links } = useMemo(() => {
     if (!submitted || name.trim().length < 2) {
