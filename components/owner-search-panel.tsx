@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -244,11 +245,17 @@ function OwnerResultCard({
 export function OwnerSearchPanel({
   initialValues,
   leadId,
+  onPipelineComplete,
+  highlight,
 }: {
   /** 线索详情等场景：用店名/地址/登记 owner 预填表单 */
   initialValues?: OwnerSearchInitialValues;
   /** 线索 ID：设置后搜索成功会写入 lead_evidence（需 ENABLE_LEAD_EVIDENCE_WRITE=1） */
   leadId?: string;
+  /** 证据入库 / 打分后刷新线索档案 */
+  onPipelineComplete?: () => void | Promise<void>;
+  /** 销售工作流建议走老板搜索时高亮面板 */
+  highlight?: boolean;
 } = {}) {
   const { t } = useTranslations();
   const [name, setName] = useState(initialValues?.name ?? '');
@@ -353,9 +360,20 @@ export function OwnerSearchPanel({
                 keyword_analysis_applied: keywordApplied,
               }),
             });
-            if (persistRes.status === 503) return;
+            if (persistRes.status === 503) {
+              const persistJson = await persistRes.json().catch(() => ({}));
+              const hint =
+                typeof persistJson.hint === 'string' ? persistJson.hint : 'ENABLE_LEAD_EVIDENCE_WRITE=1';
+              toast.error('证据未入库', { description: hint });
+              return;
+            }
             const persistJson = await persistRes.json().catch(() => ({}));
-            if (!persistRes.ok) return;
+            if (!persistRes.ok) {
+              const err =
+                typeof persistJson.error === 'string' ? persistJson.error : '证据入库失败';
+              toast.error(err);
+              return;
+            }
             const inserted =
               typeof persistJson.evidenceInserted === 'number' ? persistJson.evidenceInserted : 0;
             const contacts =
@@ -367,8 +385,14 @@ export function OwnerSearchPanel({
                 ? t.owner_evidence_saved(inserted, contacts)
                 : t.owner_evidence_saved(inserted, null),
             );
+            toast.success(
+              contacts != null && contacts > 0
+                ? t.owner_evidence_saved(inserted, contacts)
+                : t.owner_evidence_saved(inserted, null),
+            );
+            await onPipelineComplete?.();
           } catch {
-            /* 证据入库失败不阻断搜索展示 */
+            toast.error('证据入库失败，请稍后重试');
           }
         })();
       }
@@ -391,7 +415,13 @@ export function OwnerSearchPanel({
   const loadingLabel = willCrossValidate ? t.owner_searching_with_keywords : t.owner_searching;
 
   return (
-    <Card className="border-[#1e3a5f]/20">
+    <Card
+      className={
+        highlight
+          ? 'border-amber-300 ring-2 ring-amber-200/80'
+          : 'border-[#1e3a5f]/20'
+      }
+    >
       <CardHeader>
         <CardTitle className="text-lg text-[#1e3a5f]">{t.owner_title}</CardTitle>
         <p className="text-sm font-normal text-muted-foreground">{t.owner_description}</p>

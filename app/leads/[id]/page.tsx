@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, use } from 'react';
+import { useCallback, useEffect, useMemo, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,6 +18,7 @@ import { ScoreBadge } from '@/components/score-badge';
 import { StatusBadge } from '@/components/status-badge';
 import { SourceRegistrationPanel } from '@/components/source-registration-panel';
 import { OwnerSearchPanel } from '@/components/owner-search-panel';
+import { SalesWorkflowPanel } from '@/components/sales-workflow-panel';
 import { buildOwnerSearchDefaultsFromLead } from '@/lib/lead-owner-search-defaults';
 import { SfRegistrationSummary } from '@/components/sf-registration-summary';
 import { FilingHistoryPanel } from '@/components/filing-history-panel';
@@ -79,33 +80,39 @@ export default function LeadDetailPage({
   const [saving, setSaving] = useState(false);
   const [notes, setNotes] = useState('');
   const [entityNumber, setEntityNumber] = useState('');
+  const refetchLead = useCallback(async () => {
+    const response = await fetch(`/api/leads/${id}`);
+    if (!response.ok) {
+      if (response.status === 404) {
+        toast.error('Lead 不存在');
+        router.push('/leads');
+        return;
+      }
+      throw new Error('Failed to fetch');
+    }
+    const data = await response.json();
+    setLead(data);
+    setNotes(data.notes || '');
+    setEntityNumber(data.ca_entity_number?.trim() ?? '');
+  }, [id, router]);
 
   useEffect(() => {
-    async function fetchLead() {
+    void (async () => {
       try {
-        const response = await fetch(`/api/leads/${id}`);
-        if (!response.ok) {
-          if (response.status === 404) {
-            toast.error('Lead 不存在');
-            router.push('/leads');
-            return;
-          }
-          throw new Error('Failed to fetch');
-        }
-        const data = await response.json();
-        setLead(data);
-        setNotes(data.notes || '');
-        setEntityNumber(data.ca_entity_number?.trim() ?? '');
+        await refetchLead();
       } catch (error) {
         console.error('Failed to fetch lead:', error);
         toast.error('获取数据失败');
       } finally {
         setLoading(false);
       }
-    }
+    })();
+  }, [refetchLead]);
 
-    fetchLead();
-  }, [id, router]);
+  const suggestOwnerSearch = useMemo(() => {
+    if (!lead) return false;
+    return /\b(LLC|INC|CORP|L\.L\.C\.|LTD|LP)\b/i.test(lead.name ?? '');
+  }, [lead]);
 
   const filingPortal = useMemo(
     () =>
@@ -433,6 +440,16 @@ export default function LeadDetailPage({
                       ] as const)
                     : []),
                   ['lead_score', '线索评分', String(lead.lead_score), false],
+                  ['owner_entity_name', '法人实体（证据链）', displayOrDash(lead.owner_entity_name ?? null), false],
+                  ['owner_person_name', '自然人老板（证据链）', displayOrDash(lead.owner_person_name ?? null), false],
+                  ['store_status', '店态', displayOrDash(lead.store_status ?? null), false],
+                  [
+                    'new_store_confidence',
+                    '新店置信度',
+                    lead.new_store_confidence != null ? `${lead.new_store_confidence}%` : '—',
+                    false,
+                  ],
+                  ['apn', 'APN /  parcel', displayOrDash(lead.apn ?? null), false],
                   ['lead_status', '跟进状态', lead.lead_status, false],
                   ['outreach_message', '开发信（已保存）', displayOrDash(lead.outreach_message), true],
                   ['notes', '备注（已保存）', displayOrDash(lead.notes), true],
@@ -524,9 +541,18 @@ export default function LeadDetailPage({
         </Card>
       </div>
 
+      <SalesWorkflowPanel
+        leadId={id}
+        lead={lead}
+        onLeadRefresh={refetchLead}
+        preferOwnerSearch={suggestOwnerSearch}
+      />
+
       <OwnerSearchPanel
         leadId={id}
         initialValues={buildOwnerSearchDefaultsFromLead(lead)}
+        onPipelineComplete={refetchLead}
+        highlight={suggestOwnerSearch}
       />
 
       <SourceRegistrationPanel sourceRaw={lead.source_raw ?? null} />
