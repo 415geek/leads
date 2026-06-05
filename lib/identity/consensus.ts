@@ -87,9 +87,20 @@ export function computeIdentityConsensus(
   }
   agreementScore = Math.min(100, agreementScore);
 
+  const hasTrustedGovEntity = hits.some(
+    (h) =>
+      h.source === 'business_license' &&
+      Boolean(h.entityName?.trim()) &&
+      (h.confidenceRaw ?? 0) >= 0.85 &&
+      h.rawPayload &&
+      typeof h.rawPayload === 'object' &&
+      (h.rawPayload as { from?: string }).from === 'ownership_name',
+  );
+
   const locked =
     personSources.size >= IDENTITY_LOCK_CONFIG.minPersonSources ||
-    agreementScore >= IDENTITY_LOCK_CONFIG.minAgreementScore;
+    agreementScore >= IDENTITY_LOCK_CONFIG.minAgreementScore ||
+    hasTrustedGovEntity;
 
   return {
     entityName,

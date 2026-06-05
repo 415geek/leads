@@ -28,6 +28,7 @@ import { dashboardBusinessSearchHref } from '@/lib/dashboard-business-search';
 import type { OpeningIntelWebPayload } from '@/lib/opening-intel-web';
 import type { NycOpeningIntel } from '@/lib/nyc-opening-intel';
 import { resolveFilingPortalConfig } from '@/lib/filing-portal-config';
+import { summarizeSfG8m3FromSourceRaw } from '@/lib/sf-data-sf-fields';
 
 function readNycOpeningIntel(lead: Lead): NycOpeningIntel | null {
   const cls = lead.ai_classification;
@@ -112,6 +113,15 @@ export default function LeadDetailPage({
   const suggestOwnerSearch = useMemo(() => {
     if (!lead) return false;
     return /\b(LLC|INC|CORP|L\.L\.C\.|LTD|LP)\b/i.test(lead.name ?? '');
+  }, [lead]);
+
+  const ownerEntityDisplay = useMemo(() => {
+    if (!lead) return '—';
+    const fromLead = lead.owner_entity_name?.trim();
+    if (fromLead) return fromLead;
+    const fromSf = summarizeSfG8m3FromSourceRaw(lead.source_raw)?.ownershipName?.trim();
+    if (fromSf) return `${fromSf}（DataSF 登记）`;
+    return '—';
   }, [lead]);
 
   const filingPortal = useMemo(
@@ -440,7 +450,7 @@ export default function LeadDetailPage({
                       ] as const)
                     : []),
                   ['lead_score', '线索评分', String(lead.lead_score), false],
-                  ['owner_entity_name', '法人实体（证据链）', displayOrDash(lead.owner_entity_name ?? null), false],
+                  ['owner_entity_name', '法人实体（证据链）', ownerEntityDisplay, false],
                   ['owner_person_name', '自然人老板（证据链）', displayOrDash(lead.owner_person_name ?? null), false],
                   ['store_status', '店态', displayOrDash(lead.store_status ?? null), false],
                   [

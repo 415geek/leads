@@ -24,6 +24,22 @@ describe('computeIdentityConsensus', () => {
     expect(r.agreementScore).toBeGreaterThanOrEqual(50);
   });
 
+  it('locks entity from single DataSF ownership_name hit', () => {
+    const hits: IdentityNameHit[] = [
+      {
+        source: 'business_license',
+        entityName: 'Original Buffalo Wings Inc.',
+        personName: null,
+        confidenceRaw: 0.9,
+        rawPayload: { from: 'ownership_name' },
+      },
+    ];
+    const r = computeIdentityConsensus(hits, 'Dumpling Patio');
+    expect(r.locked).toBe(true);
+    expect(r.entityName).toBe('Original Buffalo Wings Inc.');
+    expect(r.personName).toBeNull();
+  });
+
   it('requires review when only conflicting persons', () => {
     const hits: IdentityNameHit[] = [
       { source: 'abc', entityName: 'A LLC', personName: 'Alice', confidenceRaw: 0.5 },

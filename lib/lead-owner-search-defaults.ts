@@ -8,6 +8,7 @@ export interface OwnerSearchInitialValues {
 }
 
 const OWNER_FIELD_KEYS = [
+  'ownership_name',
   'owner_name',
   'owner',
   'applicant',

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import type { Lead } from '@/types/lead';
+import { summarizeSfG8m3FromSourceRaw } from '@/lib/sf-data-sf-fields';
 import type { LeadEvidenceField } from '@/types/lead-evidence';
 import type { ScoredContactChannel } from '@/lib/scoring/score-contact';
 
@@ -143,6 +144,13 @@ export function SalesWorkflowPanel({
     [preferOwnerSearch, lead.name],
   );
 
+  const sfOwnership = useMemo(
+    () => summarizeSfG8m3FromSourceRaw(lead.source_raw)?.ownershipName?.trim() || null,
+    [lead.source_raw],
+  );
+
+  const displayEntityName = lead.owner_entity_name?.trim() || sfOwnership;
+
   const loadEvidenceChain = useCallback(async () => {
     try {
       const res = await fetch(`/api/leads/${leadId}/evidence-chain`);
@@ -250,7 +258,12 @@ export function SalesWorkflowPanel({
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 rounded-lg bg-slate-50 p-3 text-sm">
           <div>
             <p className="text-xs text-slate-500">法人实体</p>
-            <p className="font-medium break-words">{lead.owner_entity_name?.trim() || '—'}</p>
+            <p className="font-medium break-words">
+              {displayEntityName || '—'}
+              {!lead.owner_entity_name?.trim() && sfOwnership ? (
+                <span className="ml-1 text-xs font-normal text-amber-700">（DataSF 登记）</span>
+              ) : null}
+            </p>
           </div>
           <div>
             <p className="text-xs text-slate-500">自然人老板</p>

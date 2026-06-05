@@ -50,23 +50,42 @@ function hitsFromSourceRaw(
   if (!raw || typeof raw !== 'object') return [];
 
   const hits: IdentityNameHit[] = [];
+  const licenseSource: LeadEvidenceSource =
+    lead.source?.includes('tabc') || lead.source?.includes('abc')
+      ? 'abc'
+      : 'business_license';
+
+  // DataSF Registered Business Locations: ownership_name = legal entity holder (not DBA)
+  const ownership = strFromRaw(raw, ['ownership_name']);
+  if (ownership) {
+    hits.push({
+      source: licenseSource,
+      entityName: ownership,
+      personName: null,
+      confidenceRaw: 0.9,
+      rawPayload: { from: 'ownership_name' },
+    });
+  }
+
   const person = strFromRaw(raw, [
     'owner_name',
     'licensee_name',
     'business_owner',
     'applicant_name',
-    'dba_name',
-    'trade_name',
   ]);
-  const entity = strFromRaw(raw, ['legal_name', 'business_name', 'entity_name', 'company_name']);
+  const entity = ownership
+    ? null
+    : strFromRaw(raw, [
+        'legal_name',
+        'business_name',
+        'entity_name',
+        'company_name',
+        'ownership_name',
+      ]);
 
   if (person || entity) {
-    const source: LeadEvidenceSource =
-      lead.source?.includes('tabc') || lead.source?.includes('abc')
-        ? 'abc'
-        : 'business_license';
     hits.push({
-      source,
+      source: licenseSource,
       entityName: entity ?? lead.name,
       personName: person,
       confidenceRaw: 0.65,

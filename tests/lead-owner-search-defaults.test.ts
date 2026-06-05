@@ -18,6 +18,20 @@ describe('lead-owner-search-defaults', () => {
     expect(v.keywords).toBe('Lu\'s Kitchen');
   });
 
+  it('prefills ownership_name from DataSF source_raw', () => {
+    const v = buildOwnerSearchDefaultsFromLead({
+      name: 'Dumpling Patio',
+      address: '2499 Lombard St',
+      city: 'San Francisco',
+      source_raw: {
+        ownership_name: 'Original Buffalo Wings Inc.',
+        dba_name: 'Dumpling Patio',
+      },
+    });
+    expect(v.name).toBe('Original Buffalo Wings Inc.');
+    expect(v.keywords).toBe('Dumpling Patio');
+  });
+
   it('uses city alone when address has no state suffix', () => {
     const v = buildOwnerSearchDefaultsFromLead({
       name: 'Test Cafe',
