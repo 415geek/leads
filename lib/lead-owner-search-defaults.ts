@@ -8,8 +8,10 @@ export interface OwnerSearchInitialValues {
   address: string;
   /** DBA / 店名，用于交叉验证 */
   keywords: string;
-  /** DataSF ownership_name 等法人实体，供 OpenCorporates 登记检索 */
+  /** DataSF ownership_name 等法人实体，供 CA SOS / 登记 API 检索 */
   entityName?: string;
+  /** California SOS entity number */
+  caEntityNumber?: string;
 }
 
 /** 政府 source_raw 中的自然人老板字段（不含 ownership_name 法人实体） */
@@ -72,7 +74,13 @@ function buildRegion(city: string | null | undefined, address: string | null | u
 export function buildOwnerSearchDefaultsFromLead(
   lead: Pick<
     Lead,
-    'name' | 'address' | 'city' | 'source_raw' | 'owner_person_name' | 'owner_entity_name'
+    | 'name'
+    | 'address'
+    | 'city'
+    | 'source_raw'
+    | 'owner_person_name'
+    | 'owner_entity_name'
+    | 'ca_entity_number'
   >,
 ): OwnerSearchInitialValues {
   const personFromLead = lead.owner_person_name?.trim() ?? '';
@@ -88,6 +96,7 @@ export function buildOwnerSearchDefaultsFromLead(
     address,
     keywords: businessName,
     entityName: entityFromLead || entityFromRaw || undefined,
+    caEntityNumber: lead.ca_entity_number?.trim() || undefined,
   };
 }
 

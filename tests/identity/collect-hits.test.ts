@@ -2,10 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { collectIdentityHits } from '@/lib/identity/collect-hits';
 
 vi.mock('@/lib/opencorporates/company-search', () => ({
-  searchOpenCorporatesCompanies: vi.fn(),
+  searchRegistryCompanies: vi.fn(),
 }));
 
-import { searchOpenCorporatesCompanies } from '@/lib/opencorporates/company-search';
+import { searchRegistryCompanies } from '@/lib/opencorporates/company-search';
 
 vi.mock('@/lib/opencorporates/web-officers', () => ({
   searchOpenCorporatesOfficersViaWeb: vi.fn(),
@@ -42,19 +42,23 @@ describe('collectIdentityHits / hitsFromSourceRaw', () => {
   });
 
   it('searches OpenCorporates by ownership_name and attaches CEO', async () => {
-    vi.mocked(searchOpenCorporatesCompanies).mockResolvedValue([
-      {
-        name: 'ORIGINAL BUFFALO WINGS INC',
-        jurisdiction_code: 'us_ca',
-        company_number: 'B20260090692',
-        registered_address: '2499 LOMBARD ST, SAN FRANCISCO, 94123, CA',
-        officers: [
-          { name: 'JINZHUO HUANG', position: 'chief financial officer' },
-          { name: 'QITING LEI', position: 'chief executive officer' },
-        ],
-        opencorporates_url: 'https://opencorporates.com/companies/us_ca/1',
-      },
-    ]);
+    vi.mocked(searchRegistryCompanies).mockResolvedValue({
+      provider: 'ca_sos',
+      companies: [
+        {
+          name: 'ORIGINAL BUFFALO WINGS INC',
+          jurisdiction_code: 'us_ca',
+          company_number: 'B20260090692',
+          registered_address: '2499 LOMBARD ST, SAN FRANCISCO, 94123, CA',
+          officers: [
+            { name: 'JINZHUO HUANG', position: 'chief financial officer' },
+            { name: 'QITING LEI', position: 'chief executive officer' },
+          ],
+          opencorporates_url: 'https://bizfileonline.sos.ca.gov/search/business',
+          registry_provider: 'ca_sos',
+        },
+      ],
+    });
 
     const hits = await collectIdentityHits(
       {
@@ -67,14 +71,14 @@ describe('collectIdentityHits / hitsFromSourceRaw', () => {
       { skipOc: false },
     );
 
-    expect(searchOpenCorporatesCompanies).toHaveBeenCalledWith(
+    expect(searchRegistryCompanies).toHaveBeenCalledWith(
       'Original Buffalo Wings Inc.',
       expect.objectContaining({ jurisdictionCode: 'us_ca' }),
     );
 
-    const oc = hits.find((h) => h.source === 'opencorporates');
-    expect(oc?.personName).toBe('QITING LEI');
-    expect(oc?.entityName).toBe('ORIGINAL BUFFALO WINGS INC');
+    const reg = hits.find((h) => h.source === 'ca_sos');
+    expect(reg?.personName).toBe('QITING LEI');
+    expect(reg?.entityName).toBe('ORIGINAL BUFFALO WINGS INC');
   });
 
   it('skips OpenCorporates when ownership_name is a natural person', async () => {
@@ -88,21 +92,24 @@ describe('collectIdentityHits / hitsFromSourceRaw', () => {
       { skipOc: false },
     );
 
-    expect(searchOpenCorporatesCompanies).not.toHaveBeenCalled();
+    expect(searchRegistryCompanies).not.toHaveBeenCalled();
     expect(hits[0]?.personName).toBe('Maria Garcia Lopez');
   });
 
   it('falls back to web search when API returns company without officers', async () => {
-    vi.mocked(searchOpenCorporatesCompanies).mockResolvedValue([
-      {
-        name: 'PANGEA MANAGEMENT LLC',
-        jurisdiction_code: 'us_ca',
-        company_number: '1',
-        registered_address: null,
-        officers: [],
-        opencorporates_url: 'https://opencorporates.com/companies/us_ca/1',
-      },
-    ]);
+    vi.mocked(searchRegistryCompanies).mockResolvedValue({
+      provider: 'opencorporates',
+      companies: [
+        {
+          name: 'PANGEA MANAGEMENT LLC',
+          jurisdiction_code: 'us_ca',
+          company_number: '1',
+          registered_address: null,
+          officers: [],
+          opencorporates_url: 'https://opencorporates.com/companies/us_ca/1',
+        },
+      ],
+    });
     vi.mocked(searchOpenCorporatesOfficersViaWeb).mockResolvedValue({
       officers: [{ name: 'MICHAEL SHAO', position: 'chief executive officer' }],
       primary: { name: 'MICHAEL SHAO', position: 'chief executive officer' },

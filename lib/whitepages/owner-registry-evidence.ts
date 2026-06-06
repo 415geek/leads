@@ -6,8 +6,9 @@ import { tavilySearchInDomains } from '@/lib/intel/deep-person-intel';
 import {
   formatOcCompaniesForPrompt,
   jurisdictionFromStateCode,
-  searchOpenCorporatesCompanies,
+  searchRegistryCompanies,
   type OcCompanyHit,
+  type RegistryProvider,
 } from '@/lib/opencorporates/company-search';
 import { parseAddressInput, parseRegionInput } from '@/lib/whitepages/owner-search';
 
@@ -38,6 +39,7 @@ export interface OwnerRegistryEvidence {
   opencorporates_prompt: string;
   registry_web_snippets: RegistryWebSnippet[];
   jurisdiction_code: string;
+  registry_provider: RegistryProvider;
 }
 
 function quotedIfHasSpace(v: string): string {
@@ -91,8 +93,10 @@ export function buildRegistryWebQueries(input: {
 export async function collectOwnerRegistryEvidence(input: {
   name: string;
   keywords: string;
-  /** DataSF ownership_name 等；优先于 keywords 查 OpenCorporates */
+  /** DataSF ownership_name 等；优先于 keywords 查企业登记 API */
   entityName?: string;
+  /** CA SOS entity number（有则直达 BusinessEntityDetails） */
+  caEntityNumber?: string;
   region?: string;
   address?: string;
   fetchImpl?: typeof fetch;
@@ -104,9 +108,10 @@ export async function collectOwnerRegistryEvidence(input: {
 
   const ocQuery = input.entityName?.trim() || input.keywords.trim();
 
-  const [opencorporates_companies, registry_web_snippets] = await Promise.all([
-    searchOpenCorporatesCompanies(ocQuery, {
+  const [registryResult, registry_web_snippets] = await Promise.all([
+    searchRegistryCompanies(ocQuery, {
       jurisdictionCode: jurisdiction_code,
+      entityNumber: input.caEntityNumber?.trim(),
       maxResults: 3,
       fetchImpl: input.fetchImpl,
     }),
@@ -134,11 +139,14 @@ export async function collectOwnerRegistryEvidence(input: {
     })(),
   ]);
 
+  const opencorporates_companies = registryResult.companies;
+
   return {
     opencorporates_companies,
     opencorporates_prompt: formatOcCompaniesForPrompt(opencorporates_companies),
     registry_web_snippets,
     jurisdiction_code,
+    registry_provider: registryResult.provider,
   };
 }
 

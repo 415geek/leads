@@ -33,6 +33,17 @@ describe('lead-owner-search-defaults', () => {
     expect(v.keywords).toBe('Dumpling Patio');
   });
 
+  it('passes ca_entity_number for CA SOS direct lookup', () => {
+    const v = buildOwnerSearchDefaultsFromLead({
+      name: 'Test LLC Cafe',
+      address: '1 Market St, San Francisco, CA',
+      city: 'San Francisco',
+      ca_entity_number: '202150010654',
+      source_raw: { ownership_name: 'Test LLC' },
+    });
+    expect(v.caEntityNumber).toBe('202150010654');
+  });
+
   it('prefills Whitepages name from owner_person_name after identify', () => {
     const v = buildOwnerSearchDefaultsFromLead({
       name: 'Dumpling Patio',

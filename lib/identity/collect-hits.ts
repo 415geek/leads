@@ -1,7 +1,8 @@
 import type { LeadEvidenceSource } from '@/types/lead-evidence';
 import {
-  searchOpenCorporatesCompanies,
+  searchRegistryCompanies,
   type OcCompanyHit,
+  type RegistryProvider,
 } from '@/lib/opencorporates/company-search';
 import { pickPrimaryOfficer } from '@/lib/opencorporates/officers';
 import { searchOpenCorporatesOfficersViaWeb } from '@/lib/opencorporates/web-officers';
@@ -170,42 +171,53 @@ export async function fetchOpenCorporatesHit(
         ])
       : null;
 
+  const entityNumber = lead.ca_entity_number?.trim() || null;
+
+  const hitSource = (provider: RegistryProvider): IdentityNameHit['source'] =>
+    provider === 'ca_sos' ? 'ca_sos' : 'opencorporates';
+
   const buildHit = (
     entityName: string,
     chosen: { name: string; position: string } | null,
     extras: Record<string, unknown>,
     baseConfidence: number,
+    provider: RegistryProvider,
   ): IdentityNameHit => {
     const entityMatchBoost =
       expectedEntity && entityNamesMatch(entityName, expectedEntity) ? 0.08 : 0;
+    const source = hitSource(provider);
+    const caBoost = provider === 'ca_sos' ? 0.06 : 0;
     if (!chosen?.name) {
       return {
-        source: 'opencorporates',
+        source,
         entityName,
         personName: null,
-        confidenceRaw: 0.55,
+        confidenceRaw: 0.55 + caBoost,
         rawPayload: {
           search_query: query,
+          registry_provider: provider,
           ...extras,
         },
       };
     }
     return {
-      source: 'opencorporates',
+      source,
       entityName,
       personName: chosen.name,
-      confidenceRaw: Math.min(0.95, baseConfidence + entityMatchBoost),
+      confidenceRaw: Math.min(0.95, baseConfidence + entityMatchBoost + caBoost),
       rawPayload: {
         position: chosen.position,
         search_query: query,
+        registry_provider: provider,
         ...extras,
       },
     };
   };
 
   try {
-    const companies = await searchOpenCorporatesCompanies(query, {
+    const { companies, provider } = await searchRegistryCompanies(query, {
       jurisdictionCode: jurisdiction,
+      entityNumber: entityNumber ?? undefined,
       maxResults: 3,
       fetchImpl,
     });
@@ -214,13 +226,14 @@ export async function fetchOpenCorporatesHit(
     let entityName = company?.name ?? query;
     let extras: Record<string, unknown> = company
       ? {
-          opencorporates_url: company.opencorporates_url,
+          registry_url: company.registry_url ?? company.opencorporates_url,
           officers: company.officers.slice(0, 6),
-          lookup: 'api',
+          lookup: provider === 'ca_sos' ? 'ca_sos_api' : 'api',
+          entity_number: company.company_number || entityNumber,
         }
-      : { lookup: 'api', officers: [] };
+      : { lookup: provider === 'ca_sos' ? 'ca_sos_api' : 'api', officers: [] };
 
-    if (!chosen?.name) {
+    if (!chosen?.name && provider === 'opencorporates') {
       const web = await searchOpenCorporatesOfficersViaWeb(entityName, {
         address: address ?? undefined,
         region: metroRegionLabel(lead.metro_area),
@@ -238,8 +251,15 @@ export async function fetchOpenCorporatesHit(
 
     if (!company && !chosen?.name) return null;
 
-    return buildHit(entityName, chosen, extras, chosen ? 0.74 : 0.55);
+    const confidence = chosen
+      ? provider === 'ca_sos'
+        ? 0.8
+        : 0.74
+      : 0.55;
+    return buildHit(entityName, chosen, extras, confidence, provider);
   } catch {
+    if (jurisdiction === 'us_ca') return null;
+
     const web = await searchOpenCorporatesOfficersViaWeb(query, {
       address: address ?? undefined,
       region: metroRegionLabel(lead.metro_area),
@@ -254,6 +274,7 @@ export async function fetchOpenCorporatesHit(
         officers: web.officers.slice(0, 8),
       },
       0.7,
+      'opencorporates',
     );
   }
 }

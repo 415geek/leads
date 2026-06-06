@@ -25,8 +25,10 @@ export interface OwnerKeywordMatchInput {
   region?: string;
   address?: string;
   keywords?: string;
-  /** 法人实体名（DataSF ownership_name），OpenCorporates 优先按此检索 */
+  /** 法人实体名（DataSF ownership_name），企业登记 API 优先按此检索 */
   entityName?: string;
+  /** CA SOS entity number（有则直达 BusinessEntityDetails） */
+  caEntityNumber?: string;
   candidates: WhitepagesPersonRecord[];
 }
 
@@ -302,6 +304,7 @@ export async function runOwnerKeywordMatch(
           address: input.address,
           keywords,
           entityName: input.entityName,
+          caEntityNumber: input.caEntityNumber,
         }),
   ]);
 
@@ -339,7 +342,7 @@ ${input.address?.trim() || '—'}
 【匹配关键字（店名/DBA/公司/电话/亲属/地址线索）】
 ${keywords}
 
-【OpenCorporates API 企业登记（管辖区 ${registryEvidence.jurisdiction_code}，${registryEvidence.opencorporates_companies.length} 条）】
+【政府/企业登记 API（${registryEvidence.registry_provider === 'ca_sos' ? 'CA SOS BE' : 'OpenCorporates'}，管辖区 ${registryEvidence.jurisdiction_code}，${registryEvidence.opencorporates_companies.length} 条）】
 ${registryEvidence.opencorporates_prompt}
 
 【政府登记 / OpenCorporates 定向网页（${registrySnippets.length} 条）】

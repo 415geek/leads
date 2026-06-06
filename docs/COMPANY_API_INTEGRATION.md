@@ -310,7 +310,7 @@ POST /pdl/search
 
 | 步骤 | 方法 | 路径 | 说明 |
 |------|------|------|------|
-| 1 识别 | POST | `/leads/{id}/identify` | 政府 `ownership_name` → 法人判断 → OpenCorporates（API + AI 联网）→ `owner_name` / `owner_entity` 证据 |
+| 1 识别 | POST | `/leads/{id}/identify` | 政府 `ownership_name` → 法人判断 → **CA SOS BE API**（加州）/ OpenCorporates（其他州）→ `owner_name` / `owner_entity` 证据 |
 | 2 地产 | POST | `/property/lookup` | Body: `{ "leadId": "uuid" }` → `is_new_store` 等证据 |
 | 3 联系方式 | POST | `/leads/{id}/enrich` 或 `/owner/search` | 见下方 Provider 说明 |
 | 4 打分 | POST | `/leads/{id}/cross-validate` | 汇总证据 → `lead_contacts` + `store_status` |
@@ -345,42 +345,49 @@ GET  …/leads/{id}                    # 取店名、地址、source_raw（预�
 
 `persist-owner-search` 成功后一般**不必**再单独调 `cross-validate`（body 默认 `runCrossValidate: true`）。
 
-#### DataSF → OpenCorporates → AI 联网搜索（`identify` 步骤 1）
+#### DataSF → CA SOS / 企业登记 API（`identify` 步骤 1）
 
 适用于 SF Bay / 其他政府源在 `source_raw.ownership_name` 给出**法人实体**（如 `Pangea Management LLC`、`Original Buffalo Wings Inc.`），而 DBA 店名在 `name` 字段的场景。
 
-**链路（代码：`lib/identity/collect-hits.ts`、`lib/opencorporates/web-officers.ts`）**
+**链路（代码：`lib/ca-sos/be-public-search.ts`、`lib/identity/collect-hits.ts`）**
 
 ```
 source_raw.ownership_name
   → 规则判断：公司 vs 自然人（lib/identity/entity-kind.ts）
-      · 含 LLC / Inc / Management 等 → 公司
-      · 像「MICHAEL SHAO」两人名 → 自然人，跳过 OpenCorporates
-  → OpenCorporates API 按法人名检索（非 DBA）
-  → API 无 CEO/Agent/CFO 时：
-      Tavily 定向搜 opencorporates.com
-      → 正则抽职务行；仍无则 Claude 从摘要解析高管
-  → 政府法人 + OC 同实体 → registry chain 锁定 owner_person_name
+  → 加州（sf_bay / la）：
+      CA SOS BE Public Search API（calico.sos.ca.gov）
+      · 有 ca_entity_number → GET BusinessEntityDetails
+      · 否则 → GET BusinessEntityKeywordSearch
+      · 一手字段：EntityName、AgentName、ManagementDescription
+      · 证据 source = ca_sos
+  → 其他州：OpenCorporates API；无 officer 时可 Tavily 联网补全
+  → 政府法人 + 登记 API 同实体 → registry chain 锁定 owner_person_name
   → Whitepages 只搜自然人姓名（非 LLC 名）
 ```
+
+**CA SOS 配置**
+
+1. [https://calicodev.sos.ca.gov](https://calicodev.sos.ca.gov) 注册 → Products → Subscribe  
+2. 复制 **Ocp-Apim-Subscription-Key** → `CA_SOS_BE_SUBSCRIPTION_KEY`  
+3. 生产：`https://calico.sos.ca.gov/cbc/v1/api`；UAT：`CA_SOS_BE_UAT=1`
 
 **证据 `raw_payload` 标记**
 
 | `lookup` | 含义 |
 |----------|------|
-| `api` | 仅 OpenCorporates API 命中高管 |
-| `api+web_search` | API 找到公司但无 officer，联网补全 |
-| `web_search` | API 失败，全靠 Tavily + 正则/AI |
+| `ca_sos_api` | 加州 SOS BE API 命中 |
+| `api` | OpenCorporates（非加州） |
+| `api+web_search` | OC 无 officer，Tavily 联网补全 |
 
-**环境变量（identify 联网回退）**
+**环境变量**
 
 | 变量 | 必需 | 说明 |
 |------|------|------|
-| `OPENCORPORATES_API_TOKEN` | 推荐 | API 主路径 |
-| `TAVILY_API_KEY` | 联网回退必需 | 搜 `opencorporates.com` |
-| `ANTHROPIC_API_KEY` | 可选 | 正则抽不到高管时用 Claude 解析 |
+| `CA_SOS_BE_SUBSCRIPTION_KEY` | 加州推荐 | SOS BE API（一手政府数据） |
+| `OPENCORPORATES_API_TOKEN` | 非加州 | TX/NY 等回退 |
+| `TAVILY_API_KEY` | OC 联网回退 | 仅 OpenCorporates 路径 |
 
-**生产案例（SF）**：`Dumpling Patio` — `ownership_name` = `Original Buffalo Wings Inc.` → OC 得 CEO `QITING LEI` → Whitepages 搜自然人。`Pangea Management LLC` 类线索在 API 无 officer 时会走 `api+web_search`。
+**生产案例（SF）**：`Dumpling Patio` — `ownership_name` = `Original Buffalo Wings Inc.` → CA SOS 得 Agent/高管 → Whitepages 搜自然人。
 
 #### 何时用半自动，而非全自动 `enrich`
 
@@ -397,7 +404,8 @@ source_raw.ownership_name
 **0. 预填搜索条件**（与仪表盘「老板信息搜索」一致，见 `lib/lead-owner-search-defaults.ts`）
 
 - `name`：自然人老板（`identify` 或 `owner_person_name` 锁定后）；**不要**填 `ownership_name` 法人  
-- `entityName`：政府 `ownership_name` / `owner_entity_name`（供 OpenCorporates 交叉验证）  
+- `entityName`：政府 `ownership_name` / `owner_entity_name`（供 CA SOS / 登记 API 交叉验证）  
+- `caEntityNumber`：线索 `ca_entity_number`（有则直达 CA SOS BusinessEntityDetails）  
 - `region`：`{city}, {state}`（地址无州时仅 city，建议 CRM 补全 `, TX`）  
 - `address`：线索 `address`  
 - `keywords`：线索 `name`（DBA），用于 AI 交叉验证过滤候选

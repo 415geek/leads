@@ -263,6 +263,7 @@ export function OwnerSearchPanel({
   const [address, setAddress] = useState(initialValues?.address ?? '');
   const [keywords, setKeywords] = useState(initialValues?.keywords ?? '');
   const [entityName, setEntityName] = useState(initialValues?.entityName ?? '');
+  const [caEntityNumber] = useState(initialValues?.caEntityNumber ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState<number | null>(null);
@@ -327,6 +328,7 @@ export function OwnerSearchPanel({
         body: JSON.stringify({
           name: name.trim(),
           entityName: entityName.trim() || undefined,
+          caEntityNumber: caEntityNumber.trim() || undefined,
           region: region.trim(),
           address: address.trim(),
           keywords: keywords.trim(),
@@ -438,7 +440,10 @@ export function OwnerSearchPanel({
         <p className="text-sm font-normal text-muted-foreground">{t.owner_description}</p>
         {entityName.trim() ? (
           <p className="text-xs text-slate-600">
-            法人实体（OpenCorporates 检索）：<span className="font-medium">{entityName}</span>
+            法人实体（CA SOS / 登记检索）：<span className="font-medium">{entityName}</span>
+            {caEntityNumber.trim() ? (
+              <span className="ml-2 text-muted-foreground">#{caEntityNumber}</span>
+            ) : null}
             {name.trim() ? (
               <>
                 {' '}

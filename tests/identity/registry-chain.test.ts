@@ -25,6 +25,27 @@ describe('resolveOwnerFromRegistryChain', () => {
     expect(r?.entityName).toBe('Original Buffalo Wings Inc.');
   });
 
+  it('confirms when gov entity matches CA SOS registry hit', () => {
+    const hits: IdentityNameHit[] = [
+      {
+        source: 'business_license',
+        entityName: 'Pangea Management LLC',
+        personName: null,
+        confidenceRaw: 0.9,
+        rawPayload: { from: 'ownership_name' },
+      },
+      {
+        source: 'ca_sos',
+        entityName: 'PANGEA MANAGEMENT LLC',
+        personName: 'MICHAEL SHAO',
+        confidenceRaw: 0.8,
+        rawPayload: { position: 'registered agent', lookup: 'ca_sos_api' },
+      },
+    ];
+    const r = resolveOwnerFromRegistryChain(hits);
+    expect(r?.personName).toBe('MICHAEL SHAO');
+  });
+
   it('confirms when high-confidence gov entity matches OC without ownership_name marker', () => {
     const hits: IdentityNameHit[] = [
       {

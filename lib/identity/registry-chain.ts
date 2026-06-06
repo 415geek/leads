@@ -38,22 +38,25 @@ export function resolveOwnerFromRegistryChain(
   hits: readonly IdentityNameHit[],
 ): RegistryChainResolution | null {
   const gov = findGovEntityHit(hits);
-  const oc = hits.find(
-    (h) => h.source === 'opencorporates' && h.personName?.trim() && h.entityName?.trim(),
+  const registry = hits.find(
+    (h) =>
+      (h.source === 'opencorporates' || h.source === 'ca_sos') &&
+      h.personName?.trim() &&
+      h.entityName?.trim(),
   );
-  if (!gov?.entityName || !oc?.personName || !oc.entityName) return null;
-  if (!entityNamesMatch(gov.entityName, oc.entityName)) return null;
+  if (!gov?.entityName || !registry?.personName || !registry.entityName) return null;
+  if (!entityNamesMatch(gov.entityName, registry.entityName)) return null;
 
   const position =
-    oc.rawPayload &&
-    typeof oc.rawPayload === 'object' &&
-    typeof (oc.rawPayload as { position?: string }).position === 'string'
-      ? (oc.rawPayload as { position: string }).position
+    registry.rawPayload &&
+    typeof registry.rawPayload === 'object' &&
+    typeof (registry.rawPayload as { position?: string }).position === 'string'
+      ? (registry.rawPayload as { position: string }).position
       : null;
 
   return {
     entityName: gov.entityName.trim(),
-    personName: oc.personName.trim(),
+    personName: registry.personName.trim(),
     officerPosition: position,
   };
 }

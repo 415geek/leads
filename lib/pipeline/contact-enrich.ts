@@ -1,8 +1,8 @@
 /**
- * Contact Enrichment — owner data from OpenCorporates + email pattern inference
+ * Contact Enrichment — owner data from registry APIs + email pattern inference
  *
  * Two enrichment sources:
- *   1. OpenCorporates API (free: 50 req/day) — owner name, role
+ *   1. CA SOS BE API (加州) / OpenCorporates（其他州）— agent/officer 姓名
  *   2. Email inference from Google Places `website` domain (never from name alone)
  *      Templates: info@, contact@, {first}@, {first}.{last}@
  *      All inferred: email_inferred=true, confidence<=0.4
@@ -14,6 +14,8 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { searchRegistryCompanies } from '@/lib/opencorporates/company-search';
+import { pickPrimaryOfficer } from '@/lib/opencorporates/officers';
 
 export interface LeadContact {
   lead_id: string;
@@ -22,7 +24,7 @@ export interface LeadContact {
   phone: string | null;
   email: string | null;
   email_inferred: boolean;
-  source: 'opencorporates' | 'tx_sos' | 'google' | 'inferred';
+  source: 'opencorporates' | 'ca_sos' | 'tx_sos' | 'google' | 'inferred';
   confidence: number | null;
 }
 
@@ -34,24 +36,6 @@ export interface EnrichedLeadInput {
   metro_area: string;
   source: string;
   website?: string | null;
-}
-
-interface OcOfficer {
-  name: string;
-  position: string;
-  uid?: string;
-}
-
-interface OcSearchResult {
-  company: {
-    name: string;
-    officers?: { officer: OcOfficer }[];
-    registered_address?: { street_address?: string };
-  };
-}
-
-interface OcApiResponse {
-  results?: { companies?: OcSearchResult[] };
 }
 
 // ─── Rate limiting ────────────────────────────────────────────────────────────
@@ -69,9 +53,7 @@ export function getOcCallCount(): number {
   return ocCallsThisRun;
 }
 
-// ─── OpenCorporates ───────────────────────────────────────────────────────────
-
-const OC_BASE = 'https://api.opencorporates.com/v0.4';
+// ─── Registry (CA SOS / OpenCorporates) ───────────────────────────────────────
 
 function jurisdictionForMetro(metro: string): string {
   const map: Record<string, string> = {
@@ -93,38 +75,37 @@ function jurisdictionForMetro(metro: string): string {
   return map[metro] ?? 'us';
 }
 
-async function fetchOcOfficers(
+async function fetchRegistryOfficer(
   businessName: string,
   metro: string,
   fetchImpl: typeof fetch = globalThis.fetch,
-): Promise<OcOfficer[]> {
+): Promise<{ name: string; position: string; source: 'ca_sos' | 'opencorporates' } | null> {
   if (ocCallsThisRun >= MAX_OC_CALLS_PER_RUN) {
-    return [];
+    return null;
   }
 
-  const apiKey = process.env.OPENCORPORATES_API_TOKEN;
   const jurisdiction = jurisdictionForMetro(metro);
-  const q = encodeURIComponent(businessName.slice(0, 80));
-  const tokenParam = apiKey ? `&api_token=${apiKey}` : '';
-  const url = `${OC_BASE}/companies/search?q=${q}&jurisdiction_code=${jurisdiction}${tokenParam}`;
 
   try {
     ocCallsThisRun += 1;
-    const res = await fetchImpl(url, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) {
-      console.warn('[contact-enrich] OC HTTP', res.status, businessName);
-      return [];
-    }
+    const { companies, provider } = await searchRegistryCompanies(businessName.slice(0, 80), {
+      jurisdictionCode: jurisdiction,
+      maxResults: 1,
+      fetchImpl,
+    });
+    if (companies.length === 0) return null;
 
-    const json = (await res.json()) as OcApiResponse;
-    const companies = json.results?.companies ?? [];
-    if (companies.length === 0) return [];
+    const chosen = pickPrimaryOfficer(companies[0]!.officers);
+    if (!chosen?.name) return null;
 
-    const officers = companies[0].company.officers ?? [];
-    return officers.map((o) => o.officer);
+    return {
+      name: chosen.name,
+      position: chosen.position,
+      source: provider === 'ca_sos' ? 'ca_sos' : 'opencorporates',
+    };
   } catch (err) {
-    console.warn('[contact-enrich] OC fetch error:', businessName, err);
-    return [];
+    console.warn('[contact-enrich] registry fetch error:', businessName, err);
+    return null;
   }
 }
 
@@ -186,17 +167,12 @@ export async function enrichLeadContacts(
   const contacts: LeadContact[] = [];
   const fetchImpl = opts.fetchImpl ?? globalThis.fetch;
 
-  // 1. OpenCorporates officer lookup
+  // 1. Registry officer/agent lookup (CA SOS or OpenCorporates)
   let primaryOwnerName: string | null = null;
 
   if (!opts.skipOc) {
     try {
-      const officers = await fetchOcOfficers(lead.name, lead.metro_area, fetchImpl);
-      const prioritized = officers.filter((o) =>
-        /owner|president|director|manager|principal/i.test(o.position),
-      );
-      const chosen = prioritized[0] ?? officers[0];
-
+      const chosen = await fetchRegistryOfficer(lead.name, lead.metro_area, fetchImpl);
       if (chosen) {
         primaryOwnerName = chosen.name;
         contacts.push({
@@ -206,13 +182,12 @@ export async function enrichLeadContacts(
           phone: null,
           email: null,
           email_inferred: false,
-          source: 'opencorporates',
-          confidence: 0.7,
+          source: chosen.source,
+          confidence: chosen.source === 'ca_sos' ? 0.78 : 0.7,
         });
       }
     } catch (err) {
-      // non-blocking
-      console.warn('[contact-enrich] OC lookup failed:', lead.name, err);
+      console.warn('[contact-enrich] registry lookup failed:', lead.name, err);
     }
   }
 

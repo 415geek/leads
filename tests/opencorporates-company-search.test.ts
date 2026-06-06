@@ -3,7 +3,15 @@ import {
   formatOcCompaniesForPrompt,
   jurisdictionFromStateCode,
   searchOpenCorporatesCompanies,
+  searchRegistryCompanies,
 } from '@/lib/opencorporates/company-search';
+
+vi.mock('@/lib/ca-sos/be-public-search', () => ({
+  caSosApiConfigured: vi.fn(() => true),
+  searchCaSosCompanies: vi.fn(),
+}));
+
+import { searchCaSosCompanies } from '@/lib/ca-sos/be-public-search';
 
 describe('jurisdictionFromStateCode', () => {
   it('maps US state codes', () => {
@@ -28,6 +36,28 @@ describe('formatOcCompaniesForPrompt', () => {
     expect(text).toContain('Lu Kitchen LLC');
     expect(text).toContain('Tony Lu');
     expect(text).toContain('123 Market St');
+  });
+});
+
+describe('searchRegistryCompanies', () => {
+  it('uses CA SOS for us_ca when configured', async () => {
+    vi.mocked(searchCaSosCompanies).mockResolvedValue([
+      {
+        name: 'Lu Kitchen LLC',
+        jurisdiction_code: 'us_ca',
+        company_number: '123',
+        registered_address: null,
+        officers: [{ name: 'Tony Lu', position: 'registered agent' }],
+        opencorporates_url: 'https://bizfileonline.sos.ca.gov/search/business',
+        registry_provider: 'ca_sos',
+      },
+    ]);
+
+    const result = await searchRegistryCompanies('Lu Kitchen LLC', {
+      jurisdictionCode: 'us_ca',
+    });
+    expect(result.provider).toBe('ca_sos');
+    expect(result.companies[0]?.officers[0]?.name).toBe('Tony Lu');
   });
 });
 

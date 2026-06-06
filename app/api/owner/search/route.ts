@@ -30,6 +30,7 @@ export async function POST(request: Request) {
     const address = trimField(body.address, 200);
     const keywords = trimField(body.keywords, 200);
     const entityName = trimField(body.entityName, 200);
+    const caEntityNumber = trimField(body.caEntityNumber, 40);
 
     const ctx = resolveOwnerSearchContext({ name, region, address, keywords });
     if (!ctx.queryValid) {
@@ -60,6 +61,7 @@ export async function POST(request: Request) {
         address: address || undefined,
         keywords: keywords || undefined,
         entityName: entityName || undefined,
+        caEntityNumber: caEntityNumber || undefined,
         candidates: wpResult.results,
       });
 

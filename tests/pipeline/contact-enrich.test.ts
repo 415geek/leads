@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('@/lib/opencorporates/company-search', () => ({
+  searchRegistryCompanies: vi.fn(),
+}));
+
+import { searchRegistryCompanies } from '@/lib/opencorporates/company-search';
 import {
   enrichLeadContacts,
   enrichAndWriteContacts,
@@ -20,37 +26,42 @@ function makeLead(overrides: Partial<EnrichedLeadInput> = {}): EnrichedLeadInput
   };
 }
 
-const mockOcResponse = (officers: Array<{ name: string; position: string }>) => ({
-  results: {
+function mockRegistry(
+  officers: Array<{ name: string; position: string }>,
+  provider: 'ca_sos' | 'opencorporates' = 'opencorporates',
+) {
+  vi.mocked(searchRegistryCompanies).mockResolvedValue({
+    provider,
     companies: [
       {
-        company: {
-          name: 'Golden Dragon Inc',
-          officers: officers.map((o) => ({ officer: o })),
-        },
+        name: 'Golden Dragon Inc',
+        jurisdiction_code: 'us_ca',
+        company_number: '1',
+        registered_address: null,
+        officers,
+        opencorporates_url: null,
+        registry_provider: provider,
       },
     ],
-  },
-});
+  });
+}
 
 beforeEach(() => {
   _resetOcCallCountForTests();
+  vi.mocked(searchRegistryCompanies).mockResolvedValue({ provider: 'none', companies: [] });
 });
 
 describe('enrichLeadContacts', () => {
-  it('returns OC officer when API succeeds', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => mockOcResponse([{ name: 'John Smith', position: 'owner' }]),
-    } as unknown as Response);
+  it('returns registry officer when API succeeds', async () => {
+    mockRegistry([{ name: 'John Smith', position: 'owner' }], 'ca_sos');
 
-    const contacts = await enrichLeadContacts(makeLead(), { fetchImpl });
+    const contacts = await enrichLeadContacts(makeLead(), {});
 
     expect(contacts).toHaveLength(1);
-    expect(contacts[0].source).toBe('opencorporates');
+    expect(contacts[0].source).toBe('ca_sos');
     expect(contacts[0].name).toBe('John Smith');
     expect(contacts[0].email_inferred).toBe(false);
-    expect(contacts[0].confidence).toBe(0.7);
+    expect(contacts[0].confidence).toBe(0.78);
   });
 
   it('infers emails from website domain (no OC officer)', async () => {
@@ -67,15 +78,12 @@ describe('enrichLeadContacts', () => {
     expect(contacts.every((c) => (c.confidence ?? 1) <= 0.4)).toBe(true);
   });
 
-  it('infers personalized emails when OC owner name is known', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => mockOcResponse([{ name: 'Jane Doe', position: 'president' }]),
-    } as unknown as Response);
+  it('infers personalized emails when registry owner name is known', async () => {
+    mockRegistry([{ name: 'Jane Doe', position: 'president' }]);
 
     const contacts = await enrichLeadContacts(
       makeLead({ website: 'https://janedoe-restaurant.com' }),
-      { fetchImpl },
+      {},
     );
 
     const emails = contacts.filter((c) => c.email_inferred).map((c) => c.email);
@@ -83,25 +91,19 @@ describe('enrichLeadContacts', () => {
     expect(emails).toContain('jane.doe@janedoe-restaurant.com');
   });
 
-  it('returns empty array when no website and OC returns nothing', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ results: { companies: [] } }),
-    } as unknown as Response);
-
-    const contacts = await enrichLeadContacts(makeLead(), { fetchImpl });
+  it('returns empty array when no website and registry returns nothing', async () => {
+    const contacts = await enrichLeadContacts(makeLead(), {});
     expect(contacts).toHaveLength(0);
   });
 
-  it('is non-blocking: returns partial results when OC call throws', async () => {
-    const fetchImpl = vi.fn().mockRejectedValue(new Error('network timeout'));
+  it('is non-blocking: returns partial results when registry call throws', async () => {
+    vi.mocked(searchRegistryCompanies).mockRejectedValue(new Error('network timeout'));
 
     const contacts = await enrichLeadContacts(
       makeLead({ website: 'https://example.com' }),
-      { fetchImpl },
+      {},
     );
 
-    // Email inference still works even if OC throws
     expect(contacts.some((c) => c.email_inferred)).toBe(true);
     expect(contacts.some((c) => c.source === 'inferred')).toBe(true);
   });
@@ -126,39 +128,27 @@ describe('enrichLeadContacts', () => {
     expect(Array.isArray(contacts)).toBe(true);
   });
 
-  it('respects OC daily cap and skips calls over limit', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ results: { companies: [] } }),
-    } as unknown as Response);
-
-    // Override cap to 2 for this test
+  it('respects registry daily cap and skips calls over limit', async () => {
     const originalEnv = process.env.OPENCORPORATES_DAILY_CAP;
     process.env.OPENCORPORATES_DAILY_CAP = '2';
 
-    // Re-import would be needed for env change, so test via counter instead
-    // Just verify counter increments correctly
-    await enrichLeadContacts(makeLead({ name: 'Lead 1' }), { fetchImpl });
-    await enrichLeadContacts(makeLead({ name: 'Lead 2' }), { fetchImpl });
+    await enrichLeadContacts(makeLead({ name: 'Lead 1' }), {});
+    await enrichLeadContacts(makeLead({ name: 'Lead 2' }), {});
     const count = getOcCallCount();
     expect(count).toBe(2);
 
     process.env.OPENCORPORATES_DAILY_CAP = originalEnv;
   });
 
-  it('prioritizes owner/president/director roles from OC', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () =>
-        mockOcResponse([
-          { name: 'Random Person', position: 'secretary' },
-          { name: 'Main Owner', position: 'owner' },
-        ]),
-    } as unknown as Response);
+  it('prioritizes owner/president/director roles from registry', async () => {
+    mockRegistry([
+      { name: 'Random Person', position: 'secretary' },
+      { name: 'Main Owner', position: 'owner' },
+    ]);
 
-    const contacts = await enrichLeadContacts(makeLead(), { fetchImpl });
-    const ocContacts = contacts.filter((c) => c.source === 'opencorporates');
-    expect(ocContacts[0].name).toBe('Main Owner');
+    const contacts = await enrichLeadContacts(makeLead(), {});
+    const regContacts = contacts.filter((c) => c.source === 'opencorporates' || c.source === 'ca_sos');
+    expect(regContacts[0]?.name).toBe('Main Owner');
   });
 });
 

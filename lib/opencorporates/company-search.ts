@@ -1,8 +1,15 @@
 /**
- * OpenCorporates 企业搜索（供老板信息关键字交叉验证等单次查询场景）
+ * 企业登记检索：加州优先 CA SOS BE Public Search API，其他州回退 OpenCorporates。
  */
 
+import {
+  caSosApiConfigured,
+  searchCaSosCompanies,
+} from '@/lib/ca-sos/be-public-search';
+
 const OC_BASE = 'https://api.opencorporates.com/v0.4';
+
+export type RegistryProvider = 'ca_sos' | 'opencorporates' | 'none';
 
 export interface OcOfficerHit {
   name: string;
@@ -16,6 +23,14 @@ export interface OcCompanyHit {
   registered_address: string | null;
   officers: OcOfficerHit[];
   opencorporates_url: string | null;
+  /** 实际数据源（加州 SOS 或 OpenCorporates） */
+  registry_provider?: RegistryProvider;
+  registry_url?: string | null;
+}
+
+export interface RegistrySearchResult {
+  companies: OcCompanyHit[];
+  provider: RegistryProvider;
 }
 
 interface OcApiOfficer {
@@ -69,6 +84,39 @@ function formatRegisteredAddress(
   return parts.length > 0 ? parts.join(', ') : null;
 }
 
+/**
+ * 按管辖区选政府/第三方登记 API：加州 + CA_SOS_BE_SUBSCRIPTION_KEY → SOS 一手数据。
+ */
+export async function searchRegistryCompanies(
+  query: string,
+  options: {
+    jurisdictionCode?: string;
+    entityNumber?: string;
+    maxResults?: number;
+    fetchImpl?: typeof fetch;
+  } = {},
+): Promise<RegistrySearchResult> {
+  const jurisdiction = options.jurisdictionCode ?? 'us';
+
+  if (jurisdiction === 'us_ca' && caSosApiConfigured()) {
+    const companies = await searchCaSosCompanies(query, {
+      entityNumber: options.entityNumber,
+      expectedEntityName: query,
+      maxResults: options.maxResults,
+      fetchImpl: options.fetchImpl,
+    });
+    if (companies.length > 0) {
+      return { companies, provider: 'ca_sos' };
+    }
+  }
+
+  const companies = await searchOpenCorporatesCompanies(query, options);
+  return {
+    companies: companies.map((c) => ({ ...c, registry_provider: 'opencorporates' as const })),
+    provider: companies.length > 0 ? 'opencorporates' : 'none',
+  };
+}
+
 export async function searchOpenCorporatesCompanies(
   query: string,
   options: {
@@ -115,19 +163,26 @@ export async function searchOpenCorporatesCompanies(
 
 export function formatOcCompaniesForPrompt(companies: OcCompanyHit[]): string {
   if (companies.length === 0) {
-    return '（OpenCorporates API 无匹配或未配置 OPENCORPORATES_API_TOKEN）';
+    const ca = caSosApiConfigured();
+    if (ca) {
+      return '（CA SOS BE API 无匹配；请核对法人名或 ca_entity_number）';
+    }
+    return '（企业登记 API 无匹配；加州请配置 CA_SOS_BE_SUBSCRIPTION_KEY，其他州可配置 OPENCORPORATES_API_TOKEN）';
   }
   return companies
     .map((c, i) => {
+      const providerLabel =
+        c.registry_provider === 'ca_sos' ? 'CA SOS' : 'OpenCorporates';
       const officerLines = c.officers.length
         ? c.officers.map((o) => `  - ${o.name} (${o.position})`).join('\n')
-        : '  - （无 officer 列表）';
+        : '  - （无 agent/manager 列表）';
+      const url = c.registry_url ?? c.opencorporates_url;
       return [
-        `[OC-${i + 1}] ${c.name}`,
+        `[REG-${i + 1}] ${c.name}（${providerLabel}）`,
         `  管辖区/编号: ${c.jurisdiction_code} / ${c.company_number || '—'}`,
         c.registered_address ? `  注册地址: ${c.registered_address}` : null,
-        c.opencorporates_url ? `  URL: ${c.opencorporates_url}` : null,
-        `  高管/董事:\n${officerLines}`,
+        url ? `  URL: ${url}` : null,
+        `  登记联系人:\n${officerLines}`,
       ]
         .filter(Boolean)
         .join('\n');
