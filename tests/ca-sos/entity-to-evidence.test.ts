@@ -16,6 +16,10 @@ describe('caSosEntityToEvidenceRows', () => {
       EntityType: 'Limited Liability Company - CA',
       FilingDate: '2026-04-23T09:00:00',
       StatusDescription: 'Active',
+      EntityStreetAddress1: '3195 24TH ST',
+      EntityCity: 'SAN FRANCISCO',
+      EntityState: 'CA',
+      EntityZipCode: '94110',
       AgentName: 'TOVANNAI NATASHA BONSHEA KELLY',
       AgentAddress1: '3195 24TH ST',
       AgentCity: 'SAN FRANCISCO',
@@ -29,5 +33,10 @@ describe('caSosEntityToEvidenceRows', () => {
     expect(fields).toContain('filing_date');
     expect(fields).toContain('agent_name');
     expect(fields).toContain('owner_name');
+    const officerRow = rows.find((r) => r.field === 'officer_role');
+    expect(officerRow?.value).toBe('TOVANNAI NATASHA BONSHEA KELLY, agent');
+    const addr = rows.find((r) => r.field === 'registered_address');
+    expect(addr?.value).toContain('3195 24TH ST');
+    expect(addr?.value).toContain('\n');
   });
 });

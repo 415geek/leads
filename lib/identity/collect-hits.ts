@@ -7,6 +7,11 @@ import {
 import { pickPrimaryOfficer } from '@/lib/opencorporates/officers';
 import { searchOpenCorporatesOfficersViaWeb } from '@/lib/opencorporates/web-officers';
 import {
+  searchRegistryProfileViaWeb,
+  tavilyRegistrySearchConfigured,
+  type WebRegistryProfile,
+} from '@/lib/opencorporates/web-registry-profile';
+import {
   classifyEntityNameKind,
   shouldSearchOpenCorporatesForEntity,
 } from '@/lib/identity/entity-kind';
@@ -236,7 +241,42 @@ export async function fetchOpenCorporatesHit(
         }
       : { lookup: provider === 'ca_sos' ? 'ca_sos_api' : 'api', officers: [] };
 
-    if (!chosen?.name && provider === 'opencorporates') {
+    let webProfile: WebRegistryProfile | null = null;
+    const ocTokenConfigured = Boolean(process.env.OPENCORPORATES_API_TOKEN?.trim());
+    const shouldTryWebRegistry =
+      provider !== 'ca_sos' &&
+      tavilyRegistrySearchConfigured() &&
+      (!ocTokenConfigured || !company || !chosen?.name || !company.company_number);
+
+    if (shouldTryWebRegistry) {
+      webProfile = await searchRegistryProfileViaWeb(entityName, {
+        address: address ?? undefined,
+        region: metroRegionLabel(lead.metro_area),
+        entityNumber: entityNumber ?? company?.company_number,
+      });
+      if (webProfile) {
+        entityName = webProfile.entityName || entityName;
+        if (!chosen?.name) {
+          const primary = webProfile.officers[0] ?? null;
+          chosen = primary
+            ? { name: primary.name, position: primary.position }
+            : webProfile.agentName
+              ? { name: webProfile.agentName, position: 'agent' }
+              : null;
+        }
+        extras = {
+          ...extras,
+          lookup: company ? 'api+web_search' : 'web_search',
+          web_search_via: webProfile.via,
+          oc_web_registry: webProfile,
+          entity_number: webProfile.companyNumber || extras.entity_number,
+          registry_url: webProfile.registryUrl ?? extras.registry_url,
+          officers: webProfile.officers.slice(0, 8),
+        };
+      }
+    }
+
+    if (!chosen?.name && provider === 'opencorporates' && !webProfile) {
       const web = await searchOpenCorporatesOfficersViaWeb(entityName, {
         address: address ?? undefined,
         region: metroRegionLabel(lead.metro_area),
@@ -252,16 +292,49 @@ export async function fetchOpenCorporatesHit(
       }
     }
 
-    if (!company && !chosen?.name) return null;
+    if (!company && !chosen?.name && !webProfile) return null;
 
-    const confidence = chosen
-      ? provider === 'ca_sos'
-        ? 0.8
-        : 0.74
-      : 0.55;
+    const confidence = webProfile
+      ? chosen
+        ? 0.72
+        : 0.6
+      : chosen
+        ? provider === 'ca_sos'
+          ? 0.8
+          : 0.74
+        : 0.55;
     return buildHit(entityName, chosen, extras, confidence, provider);
   } catch {
-    if (jurisdiction === 'us_ca') return null;
+    const webProfile = tavilyRegistrySearchConfigured()
+      ? await searchRegistryProfileViaWeb(query, {
+          address: address ?? undefined,
+          region: metroRegionLabel(lead.metro_area),
+          entityNumber: entityNumber ?? undefined,
+        }).catch(() => null)
+      : null;
+
+    if (webProfile) {
+      const primary = webProfile.officers[0] ?? null;
+      const chosen = primary
+        ? { name: primary.name, position: primary.position }
+        : webProfile.agentName
+          ? { name: webProfile.agentName, position: 'agent' }
+          : null;
+      return buildHit(
+        webProfile.entityName || query,
+        chosen,
+        {
+          lookup: 'web_search',
+          web_search_via: webProfile.via,
+          oc_web_registry: webProfile,
+          entity_number: webProfile.companyNumber,
+          registry_url: webProfile.registryUrl,
+          officers: webProfile.officers.slice(0, 8),
+        },
+        chosen ? 0.7 : 0.58,
+        'opencorporates',
+      );
+    }
 
     const web = await searchOpenCorporatesOfficersViaWeb(query, {
       address: address ?? undefined,

@@ -1,5 +1,7 @@
 import { caSosEntityToEvidenceRows } from '@/lib/ca-sos/entity-to-evidence';
 import type { CaSosBeEntity } from '@/lib/ca-sos/be-public-search';
+import { webRegistryProfileToEvidenceRows } from '@/lib/opencorporates/registry-profile-to-evidence';
+import type { WebRegistryProfile } from '@/lib/opencorporates/web-registry-profile';
 import type { LeadEvidenceInsert } from '@/types/lead-evidence';
 import type { IdentityNameHit } from './types';
 
@@ -11,6 +13,12 @@ export function hitsToEvidence(leadId: string, hits: IdentityNameHit[]): LeadEvi
     const caEntity = h.rawPayload?.ca_sos_entity as CaSosBeEntity | undefined;
     if (h.source === 'ca_sos' && caEntity?.EntityID) {
       rows.push(...caSosEntityToEvidenceRows(leadId, caEntity, h.confidenceRaw));
+      continue;
+    }
+
+    const webProfile = h.rawPayload?.oc_web_registry as WebRegistryProfile | undefined;
+    if (h.source === 'opencorporates' && webProfile?.entityName) {
+      rows.push(...webRegistryProfileToEvidenceRows(leadId, webProfile, h.confidenceRaw));
       continue;
     }
 

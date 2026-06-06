@@ -51,9 +51,43 @@ describe('hitsToEvidence', () => {
     expect(byField.registered_address?.value).toContain('3195 24TH ST');
     expect(byField.agent_name?.value).toBe('TOVANNAI NATASHA BONSHEA KELLY');
     expect(byField.owner_name?.value).toBe('TOVANNAI NATASHA BONSHEA KELLY');
-    expect(byField.officer_role?.value).toBe('registered agent');
+    expect(byField.officer_role?.value).toBe('TOVANNAI NATASHA BONSHEA KELLY, agent');
 
     expect(rows.filter((r) => r.source === 'business_license')).toHaveLength(1);
     expect(rows.filter((r) => r.source === 'ca_sos').length).toBeGreaterThanOrEqual(8);
+  });
+
+  it('expands OpenCorporates web registry profile into evidence rows', () => {
+    const hits: IdentityNameHit[] = [
+      {
+        source: 'opencorporates',
+        entityName: 'Celadon Table LLC',
+        personName: 'TOVANNAI NATASHA BONSHEA KELLY',
+        confidenceRaw: 0.72,
+        rawPayload: {
+          lookup: 'web_search',
+          oc_web_registry: {
+            entityName: 'Celadon Table LLC',
+            companyNumber: 'B20260193867',
+            status: 'Active',
+            incorporationDate: '23 April 2026',
+            companyType: 'Limited Liability Company - CA',
+            jurisdiction: 'California (US)',
+            registeredAddress: '3195 24TH ST\nSAN FRANCISCO',
+            agentName: 'TOVANNAI NATASHA BONSHEA KELLY',
+            agentAddress: '3195 24TH ST, SAN FRANCISCO, CA',
+            directorsOfficers: 'TOVANNAI NATASHA BONSHEA KELLY, agent',
+            officers: [{ name: 'TOVANNAI NATASHA BONSHEA KELLY', position: 'agent' }],
+            registryUrl: 'https://opencorporates.com/companies/us_ca/B20260193867',
+            snippetsUsed: 2,
+            via: 'ai',
+          },
+        },
+      },
+    ];
+
+    const rows = hitsToEvidence('lead-2', hits);
+    expect(rows.filter((r) => r.source === 'opencorporates').length).toBeGreaterThanOrEqual(8);
+    expect(rows.find((r) => r.field === 'entity_number')?.value).toBe('B20260193867');
   });
 });

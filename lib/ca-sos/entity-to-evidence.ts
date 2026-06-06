@@ -7,6 +7,32 @@ function formatAddress(parts: Array<string | null | undefined>): string | null {
   return line.length > 0 ? line.join(', ') : null;
 }
 
+function formatAddressMultiline(parts: {
+  street1?: string | null;
+  street2?: string | null;
+  city?: string | null;
+  zip?: string | null;
+  state?: string | null;
+  country?: string | null;
+}): string | null {
+  const lines: string[] = [];
+  const s1 = parts.street1?.trim();
+  const s2 = parts.street2?.trim();
+  if (s1) lines.push(s2 ? `${s1} ${s2}` : s1);
+  else if (s2) lines.push(s2);
+  if (parts.city?.trim()) lines.push(parts.city.trim());
+  if (parts.zip?.trim()) lines.push(parts.zip.trim());
+  if (parts.state?.trim()) lines.push(parts.state.trim());
+  if (parts.country?.trim()) lines.push(parts.country.trim());
+  return lines.length > 0 ? lines.join('\n') : null;
+}
+
+function shortOfficerRole(position: string | undefined): string {
+  const p = position?.trim().toLowerCase() ?? '';
+  if (!p || p === 'registered agent') return 'agent';
+  return p;
+}
+
 /** Human-readable filing date (matches OpenCorporates-style display). */
 export function formatCaSosFilingDate(raw: string | undefined): string | null {
   if (!raw?.trim()) return null;
@@ -20,31 +46,34 @@ export function formatCaSosFilingDate(raw: string | undefined): string | null {
 }
 
 function registeredAddressFromEntity(entity: CaSosBeEntity): string | null {
-  const street = formatAddress([
-    entity.EntityStreetAddress1,
-    entity.EntityStreetAddress2,
-    entity.EntityCity,
-    entity.EntityState,
-    entity.EntityZipCode,
-  ]);
+  const street = formatAddressMultiline({
+    street1: entity.EntityStreetAddress1,
+    street2: entity.EntityStreetAddress2,
+    city: entity.EntityCity,
+    zip: entity.EntityZipCode,
+    state: entity.EntityState,
+    country: 'United States',
+  });
   if (street) return street;
 
-  const mailing = formatAddress([
-    entity.MailingStreetAddress1,
-    entity.MailingStreetAddress2,
-    entity.MailingCity,
-    entity.MailingState,
-    entity.MailingZipCode,
-  ]);
+  const mailing = formatAddressMultiline({
+    street1: entity.MailingStreetAddress1,
+    street2: entity.MailingStreetAddress2,
+    city: entity.MailingCity,
+    zip: entity.MailingZipCode,
+    state: entity.MailingState,
+    country: 'United States',
+  });
   if (mailing) return mailing;
 
-  return formatAddress([
-    entity.AgentAddress1,
-    entity.AgentAddress2,
-    entity.AgentCity,
-    entity.AgentState,
-    entity.AgentZipCode,
-  ]);
+  return formatAddressMultiline({
+    street1: entity.AgentAddress1,
+    street2: entity.AgentAddress2,
+    city: entity.AgentCity,
+    zip: entity.AgentZipCode,
+    state: entity.AgentState,
+    country: 'United States',
+  });
 }
 
 function agentAddressFromEntity(entity: CaSosBeEntity): string | null {
@@ -140,12 +169,21 @@ export function caSosEntityToEvidenceRows(
   );
 
   const person = officer?.name ?? entity.AgentName;
+  const role = shortOfficerRole(officer?.position);
   pushRow(rows, leadId, 'owner_name', person, fetchedAt, confidenceRaw, {
     ...snapshot,
-    position: officer?.position ?? 'agent',
+    position: role,
   });
-  if (officer?.position) {
-    pushRow(rows, leadId, 'officer_role', officer.position, fetchedAt, confidenceRaw, snapshot);
+  if (person) {
+    pushRow(
+      rows,
+      leadId,
+      'officer_role',
+      `${person}, ${role}`,
+      fetchedAt,
+      confidenceRaw,
+      snapshot,
+    );
   }
 
   return rows;

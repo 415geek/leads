@@ -9,6 +9,7 @@ import type { Lead } from '@/types/lead';
 import { summarizeSfG8m3FromSourceRaw } from '@/lib/sf-data-sf-fields';
 import type { LeadEvidenceField } from '@/types/lead-evidence';
 import type { ScoredContactChannel } from '@/lib/scoring/score-contact';
+import { caSosRegistryProfileFromEvidence } from '@/lib/ca-sos/registry-profile-from-evidence';
 
 type PipelineStep = 'identify' | 'property' | 'enrich' | 'crossValidate';
 
@@ -77,7 +78,7 @@ const FIELD_LABELS: Record<LeadEvidenceField, string> = {
   registered_address: '注册地址',
   agent_name: '登记代理人',
   agent_address: '代理人地址',
-  officer_role: '职务',
+  officer_role: '董事/高管',
 };
 
 function storeStatusLabel(status: string | null | undefined): string {
@@ -160,6 +161,11 @@ export function SalesWorkflowPanel({
   );
 
   const displayEntityName = lead.owner_entity_name?.trim() || sfOwnership;
+
+  const caSosProfile = useMemo(
+    () => caSosRegistryProfileFromEvidence(evidence),
+    [evidence],
+  );
 
   const loadEvidenceChain = useCallback(async () => {
     try {
@@ -391,6 +397,58 @@ export function SalesWorkflowPanel({
                 </li>
               ))}
             </ul>
+          </section>
+        ) : null}
+
+        {caSosProfile ? (
+          <section className="rounded-lg border border-slate-200 bg-white">
+            <div className="border-b border-slate-100 px-3 py-2">
+              <h3 className="text-sm font-semibold text-slate-800">企业登记详情</h3>
+              <p className="text-xs text-slate-500">
+                {caSosProfile.entityName ?? displayEntityName ?? '—'}
+              </p>
+            </div>
+            <dl className="grid gap-x-4 gap-y-2 px-3 py-3 text-sm sm:grid-cols-2">
+              {(
+                [
+                  ['公司编号', caSosProfile.companyNumber],
+                  ['状态', caSosProfile.status],
+                  ['注册日期', caSosProfile.incorporationDate],
+                  ['公司类型', caSosProfile.companyType],
+                  ['管辖区', caSosProfile.jurisdiction],
+                  ['登记代理人', caSosProfile.agentName],
+                ] as const
+              ).map(([label, value]) =>
+                value ? (
+                  <div key={label}>
+                    <dt className="text-xs text-slate-500">{label}</dt>
+                    <dd className="font-medium text-slate-900 break-words">{value}</dd>
+                  </div>
+                ) : null,
+              )}
+              {caSosProfile.registeredAddress ? (
+                <div className="sm:col-span-2">
+                  <dt className="text-xs text-slate-500">注册地址</dt>
+                  <dd className="font-medium text-slate-900 whitespace-pre-line break-words">
+                    {caSosProfile.registeredAddress}
+                  </dd>
+                </div>
+              ) : null}
+              {caSosProfile.agentAddress ? (
+                <div className="sm:col-span-2">
+                  <dt className="text-xs text-slate-500">代理人地址</dt>
+                  <dd className="font-medium text-slate-900 break-words">{caSosProfile.agentAddress}</dd>
+                </div>
+              ) : null}
+              {caSosProfile.directorsOfficers ? (
+                <div className="sm:col-span-2">
+                  <dt className="text-xs text-slate-500">董事/高管</dt>
+                  <dd className="font-medium text-slate-900 break-words">
+                    {caSosProfile.directorsOfficers}
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
           </section>
         ) : null}
 
