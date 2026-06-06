@@ -30,6 +30,7 @@ export interface CaSosBeEntity {
   MailingState?: string | null;
   MailingZipCode?: string | null;
   EntityStreetAddress1?: string | null;
+  EntityStreetAddress2?: string | null;
   EntityCity?: string | null;
   EntityState?: string | null;
   EntityZipCode?: string | null;
