@@ -5,6 +5,7 @@
 import {
   caSosApiConfigured,
   searchCaSosCompanies,
+  type CaSosBeEntity,
 } from '@/lib/ca-sos/be-public-search';
 
 const OC_BASE = 'https://api.opencorporates.com/v0.4';
@@ -26,6 +27,8 @@ export interface OcCompanyHit {
   /** 实际数据源（加州 SOS 或 OpenCorporates） */
   registry_provider?: RegistryProvider;
   registry_url?: string | null;
+  /** 加州 SOS 原始实体（证据链明细用） */
+  ca_sos_entity?: CaSosBeEntity;
 }
 
 export interface RegistrySearchResult {

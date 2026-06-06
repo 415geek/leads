@@ -40,7 +40,7 @@ const STEP_META: Record<
     label: '1. 识别经营主体',
     short: '识别',
     path: '/api/leads/identify',
-    hint: 'DataSF ownership → OpenCorporates 高管 → 预填老板搜索',
+    hint: '地方政府登记名 → CA SOS API → 证据链写入登记详情',
   },
   property: {
     label: '2. 地产验证',
@@ -69,6 +69,15 @@ const FIELD_LABELS: Record<LeadEvidenceField, string> = {
   email: '邮箱',
   is_new_store: '新店信号',
   address: '地址',
+  entity_number: '公司编号',
+  entity_status: '状态',
+  filing_date: '注册日期',
+  entity_type: '公司类型',
+  jurisdiction: '管辖区',
+  registered_address: '注册地址',
+  agent_name: '登记代理人',
+  agent_address: '代理人地址',
+  officer_role: '职务',
 };
 
 function storeStatusLabel(status: string | null | undefined): string {

@@ -6,7 +6,17 @@ export type LeadEvidenceField =
   | 'phone'
   | 'email'
   | 'is_new_store'
-  | 'address';
+  | 'address'
+  /** CA SOS / 企业登记 API */
+  | 'entity_number'
+  | 'entity_status'
+  | 'filing_date'
+  | 'entity_type'
+  | 'jurisdiction'
+  | 'registered_address'
+  | 'agent_name'
+  | 'agent_address'
+  | 'officer_role';
 
 export type LeadEvidenceSource =
   | 'attom'

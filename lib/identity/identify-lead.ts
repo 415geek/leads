@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { LeadEvidenceInsert } from '@/types/lead-evidence';
 import { isMissingSchemaError } from '@/lib/evidence/postgres-errors';
 import { collectIdentityHits, type LeadIdentityInput } from './collect-hits';
+import { hitsToEvidence } from './evidence-from-hits';
 import { computeIdentityConsensus } from './consensus';
 import { isLeadIdentifyGateEnabled } from './identify-gate';
 import {
@@ -28,38 +28,6 @@ export interface IdentifyLeadResult {
   reviewReason: string | null;
   /** flag 开时：confirmed 才写 owner_person_name */
   ownerResolutionStatus?: 'confirmed' | 'review' | null;
-}
-
-function hitsToEvidence(leadId: string, hits: ReturnType<typeof computeIdentityConsensus>['hits']): LeadEvidenceInsert[] {
-  const fetchedAt = new Date().toISOString();
-  const rows: LeadEvidenceInsert[] = [];
-
-  for (const h of hits) {
-    if (h.entityName?.trim()) {
-      rows.push({
-        lead_id: leadId,
-        field: 'owner_entity',
-        value: h.entityName.trim(),
-        source: h.source,
-        fetched_at: fetchedAt,
-        confidence_raw: h.confidenceRaw,
-        raw_payload: h.rawPayload ?? null,
-      });
-    }
-    if (h.personName?.trim()) {
-      rows.push({
-        lead_id: leadId,
-        field: 'owner_name',
-        value: h.personName.trim(),
-        source: h.source,
-        fetched_at: fetchedAt,
-        confidence_raw: h.confidenceRaw,
-        raw_payload: h.rawPayload ?? null,
-      });
-    }
-  }
-
-  return rows;
 }
 
 export async function identifyLeadById(

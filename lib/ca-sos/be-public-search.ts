@@ -136,6 +136,7 @@ export function caSosEntityToCompanyHit(entity: CaSosBeEntity): OcCompanyHit {
     opencorporates_url: url,
     registry_provider: 'ca_sos',
     registry_url: url,
+    ca_sos_entity: entity,
   };
 }
 

@@ -56,6 +56,13 @@ describe('collectIdentityHits / hitsFromSourceRaw', () => {
           ],
           opencorporates_url: 'https://bizfileonline.sos.ca.gov/search/business',
           registry_provider: 'ca_sos',
+          ca_sos_entity: {
+            EntityID: 'B20260090692',
+            EntityName: 'ORIGINAL BUFFALO WINGS INC',
+            EntityType: 'Corporation - CA',
+            StatusDescription: 'Active',
+            AgentName: 'QITING LEI',
+          },
         },
       ],
     });
@@ -79,6 +86,9 @@ describe('collectIdentityHits / hitsFromSourceRaw', () => {
     const reg = hits.find((h) => h.source === 'ca_sos');
     expect(reg?.personName).toBe('QITING LEI');
     expect(reg?.entityName).toBe('ORIGINAL BUFFALO WINGS INC');
+    expect(reg?.rawPayload?.ca_sos_entity).toMatchObject({
+      EntityID: 'B20260090692',
+    });
   });
 
   it('skips OpenCorporates when ownership_name is a natural person', async () => {

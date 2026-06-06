@@ -230,6 +230,9 @@ export async function fetchOpenCorporatesHit(
           officers: company.officers.slice(0, 6),
           lookup: provider === 'ca_sos' ? 'ca_sos_api' : 'api',
           entity_number: company.company_number || entityNumber,
+          ...(company.ca_sos_entity
+            ? { ca_sos_entity: company.ca_sos_entity }
+            : {}),
         }
       : { lookup: provider === 'ca_sos' ? 'ca_sos_api' : 'api', officers: [] };
 
